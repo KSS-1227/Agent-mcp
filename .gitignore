@@ -1,4 +1,6 @@
-# Secrets — broad by design; re-admit only the template
+# ===========================================================================
+# Credentials — broad by design; re-admit only the template
+# ===========================================================================
 .env*
 !.env.example
 *.pem
@@ -6,7 +8,9 @@
 *.p12
 credentials.json
 
+# ===========================================================================
 # Dependencies and build output
+# ===========================================================================
 node_modules/
 **/node_modules/
 .next/
@@ -16,29 +20,60 @@ out/
 dist/
 **/dist/
 *.tsbuildinfo
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
 
+# ===========================================================================
+# Infrastructure state and benchmark scratch
+# ===========================================================================
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+**/bench/raw/
+**/bench/tmp/
+
+# ===========================================================================
 # Compiler scratch directories
+# ===========================================================================
 **/.tmp-cjs/
 **/.tmp-run/
 
-# Logs and captured output
+# ===========================================================================
+# Logs, captured output and framework temp state
+# ===========================================================================
 *.log
 *.log.*
 *.txt
-
-# Test artefacts
-coverage/
-**/coverage/
-
-# Separately published upstream repositories.
-# conflict-engine and recovery-engine keep their own history and remotes
-# (usv240/interlock, virajchogle/anchor) and are never pushed here.
-conflict-engine/
-recovery-engine/
-
-# OS / editor
+**/supabase/.temp/
 .DS_Store
 Thumbs.db
+
+# ===========================================================================
+# Test artefacts
+# ===========================================================================
+coverage/
+**/coverage/
+.jest-cache/
+
+# ===========================================================================
+# Editor / OS
+# ===========================================================================
 .vscode/
 .idea/
 *.swp
+
+# ===========================================================================
+# The two engines are FIRST-CLASS CONTENT of this repository, tracked as
+# ordinary directories rather than submodules. These re-admissions are
+# explicit so that no broad rule above can ever swallow them again — an
+# unanchored "conflict-engine/" or "recovery-engine/" pattern would also
+# match agent-safety-mcp/src/conflict-engine/ and src/recovery-engine/.
+# ===========================================================================
+!conflict-engine/
+!recovery-engine/

@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+  <head><title>interactive check</title></head>
+  <body style="font:13px/1.6 monospace; padding:12px; white-space:pre">
+    <div id="out">running…</div>
+    <iframe id="f" src="/" style="width:1400px;height:900px;border:1px solid #ccc"></iframe>
+    <script>
+      const lines = [];
+      const out = document.getElementById("out");
+      const say = (s) => { lines.push(s); out.textContent = lines.join("\n"); };
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+      document.getElementById("f").addEventListener("load", async () => {
+        const f = document.getElementById("f");
+        const d = f.contentDocument;
+        const w = f.contentWindow;
+
+        const details = [...d.querySelectorAll("details")];
+        say(`${details.length >= 3 ? "PASS" : "FAIL"}  found ${details.length} disclosures`);
+        if (details.length) {
+          const before = details[0].open;
+          details[0].querySelector("summary").click();
+          await sleep(80);
+          say(`${details[0].open !== before ? "PASS" : "FAIL"}  summary click toggles open`);
+          details[0].querySelector("summary").click();
+        }
+
+        const nav = () => {
+          const a = d.querySelector('nav a[aria-current="true"]');
+          return a ? a.textContent.trim() : "(none)";
+        };
+        const bar = () => {
+          const el = d.querySelector("header div[aria-hidden='true'] > div");
+          if (!el) return null;
+          const m = /scaleX\(([\d.]+)\)/.exec(el.style.transform || "");
+          return m ? Number(m[1]) : null;
+        };
+
+        // The section each target should highlight, checked by name so an
+        // off-by-one in the reading line shows up as a failure rather than a
+        // plausible-looking string.
+        const targets = [
+          ["mechanism", "How it works"],
+          ["benchmark", "Benchmark"],
+          ["use-it", "Use it"],
+          ["problem", "Problem"],
+        ];
+
+        for (const [id, expected] of targets) {
+          const el = d.getElementById(id);
+          w.scrollTo({ top: el.offsetTop + 200, behavior: "instant" });
+          w.dispatchEvent(new Event("scroll"));
+          await sleep(200);
+          const got = nav();
+          say(`${got === expected ? "PASS" : "FAIL"}  200px into #${id} -> nav "${got}" (expected "${expected}") bar=${bar()}`);
+        }
+
+        w.scrollTo({ top: 0, behavior: "instant" });
+        w.dispatchEvent(new Event("scroll"));
+        await sleep(150);
+        const top = bar();
+        w.scrollTo({ top: d.documentElement.scrollHeight, behavior: "instant" });
+        w.dispatchEvent(new Event("scroll"));
+        await sleep(200);
+        const bottom = bar();
+        say(`${bottom > top ? "PASS" : "FAIL"}  progress grows ${top} -> ${bottom}`);
+
+        const before = d.documentElement.getAttribute("data-theme");
+        const btn = [...d.querySelectorAll("header button")].find((b) =>
+          /theme|dark|light/i.test(b.getAttribute("aria-label") || ""),
+        );
+        btn.click();
+        await sleep(120);
+        const after = d.documentElement.getAttribute("data-theme");
+        say(`${after !== before ? "PASS" : "FAIL"}  theme toggle ${before} -> ${after}`);
+
+        say("\ndone");
+      });
+    </script>
+  </body>
+</html>

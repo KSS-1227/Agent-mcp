@@ -1,0 +1,89 @@
+<!doctype html>
+<!--
+  A real browser, a real cross-origin request.
+
+  This is the check that was missing when the duplicated CORS header shipped:
+  curl passed, the SDK passed, and the only thing that failed was a browser —
+  because CORS is enforced by browsers and by nothing else. Served from
+  localhost, which is a different origin to the Lambda URL, so the browser runs
+  the full preflight-then-request dance exactly as it does on the real site.
+-->
+<html>
+  <head><title>CORS check</title></head>
+  <body style="font:14px/1.6 monospace; padding:16px; white-space:pre">
+    <div id="out">running…</div>
+    <script>
+      const API =
+        "https://wpvk3ox2bxo2w3zhxmx54ssjf40rakuz.lambda-url.us-east-1.on.aws/";
+      const out = document.getElementById("out");
+      const lines = [];
+      const say = (s) => {
+        lines.push(s);
+        out.textContent = lines.join("\n");
+      };
+
+      (async () => {
+        // 1. simple GET, no preflight
+        try {
+          const r = await fetch(API + "v1/health");
+          const j = await r.json();
+          say(`PASS  GET /v1/health -> ${r.status}, ${j.topology.regions.length} regions`);
+        } catch (e) {
+          say(`FAIL  GET /v1/health -> ${e.message}`);
+        }
+
+        // 2. POST with content-type: json — this one triggers a preflight, and
+        //    is the exact request the "Get an API key" button makes.
+        let key = null;
+        try {
+          const r = await fetch(API + "v1/keys", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ name: "CORS check", label: "test" }),
+          });
+          const j = await r.json();
+          key = j.key;
+          say(`PASS  POST /v1/keys -> ${r.status}, tenant ${j.tenant.slug}`);
+        } catch (e) {
+          say(`FAIL  POST /v1/keys -> ${e.message}`);
+        }
+
+        // 3. authorization header — a second preflight-triggering header
+        if (key) {
+          try {
+            const r = await fetch(API + "v1/agents", {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                authorization: `Bearer ${key}`,
+              },
+              body: JSON.stringify({ name: "CORS Probe" }),
+            });
+            const j = await r.json();
+            say(`PASS  POST /v1/agents (bearer) -> ${r.status}, id ${String(j.agent.id).slice(0, 8)}…`);
+          } catch (e) {
+            say(`FAIL  POST /v1/agents (bearer) -> ${e.message}`);
+          }
+        }
+
+        // 4. the streaming endpoint the live demo uses
+        try {
+          const r = await fetch(API + "v1/demo/stream", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: "{}",
+          });
+          const reader = r.body.getReader();
+          const { value } = await reader.read();
+          reader.cancel();
+          const first = new TextDecoder().decode(value).split("\n")[0].slice(0, 60);
+          say(`PASS  POST /v1/demo/stream -> ${r.status}, first event ${first}…`);
+        } catch (e) {
+          say(`FAIL  POST /v1/demo/stream -> ${e.message}`);
+        }
+
+        say("\ndone");
+      })();
+    </script>
+  </body>
+</html>

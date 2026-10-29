@@ -1,0 +1,64 @@
+# Secrets — never commit
+#
+# `.env*` is deliberately broad. An earlier version used `.env` + `.env*.local`,
+# which looked thorough and silently failed to match `.env.local.bak` — a file
+# the rotation script creates, containing the password being rotated away from.
+# Enumerate-the-good-cases is the wrong shape for a secrets rule; the only safe
+# default is to exclude everything and re-admit the template explicitly.
+.env*
+!.env.example
+*.pem
+*.key
+*.p12
+credentials.json
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.*
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Next.js
+web/.next/
+web/out/
+web/build/
+.next/
+next-env.d.ts
+
+# Terraform
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.*
+infra/*.tfvars
+infra/.terraform.lock.hcl
+
+# Benchmark output (regenerable; committed results live in bench/results/)
+bench/raw/
+bench/tmp/
+
+# Build / tooling
+dist/
+coverage/
+*.tsbuildinfo
+.eslintcache
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Personal recording notes � the shooting script, not the submission.
+VIDEO-SHOOTING-SCRIPT.md
+
+# Throwaway diagnostic scripts
+scripts/probe-tmp.mjs

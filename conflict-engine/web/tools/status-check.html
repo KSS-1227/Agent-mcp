@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+  <head><title>status panel check</title></head>
+  <body style="font:13px/1.6 monospace; padding:12px; white-space:pre">
+    <div id="out">running…</div>
+    <iframe id="f" src="/" style="width:1400px;height:800px;border:1px solid #ccc"></iframe>
+    <script>
+      const lines = [];
+      const out = document.getElementById("out");
+      const say = (s) => { lines.push(s); out.textContent = lines.join("\n"); };
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+      document.getElementById("f").addEventListener("load", async () => {
+        const d = document.getElementById("f").contentDocument;
+        await sleep(3000); // let the health fetch land
+
+        const btn = [...d.querySelectorAll("header button")].find((b) =>
+          /service status/i.test(b.getAttribute("aria-label") || ""),
+        );
+        say(btn ? `PASS  status button present — "${btn.textContent.trim()}"` : "FAIL  no status button");
+        if (!btn) return say("\ndone");
+
+        // Scope to the panel, not to `header li` — the nav's own links are <li>
+        // too, so that count is never zero and the close check could not fail.
+        const panel = () => btn.parentElement.querySelector("div.card");
+
+        btn.click();
+        await sleep(300);
+        const p = panel();
+        const rows = p ? p.querySelectorAll("li") : [];
+        say(`${rows.length >= 8 ? "PASS" : "FAIL"}  panel lists ${rows.length} services`);
+        [...rows].slice(0, 10).forEach((li) => say("        " + li.textContent.trim().replace(/\s+/g, " ").slice(0, 92)));
+
+        d.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        await sleep(250);
+        say(`${!panel() ? "PASS" : "FAIL"}  Escape closes the panel`);
+
+        btn.click();
+        await sleep(200);
+        d.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+        await sleep(250);
+        say(`${!panel() ? "PASS" : "FAIL"}  clicking outside closes the panel`);
+
+        say("\ndone");
+      });
+    </script>
+  </body>
+</html>

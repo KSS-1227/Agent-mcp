@@ -1,0 +1,169 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>INTERLOCK architecture</title>
+<style>
+  @page { size: 1600px 1000px; margin: 0; }
+  html, body { margin: 0; padding: 0; background: #ffffff; }
+  svg { display: block; }
+  text { font-family: "Segoe UI", Inter, Helvetica, Arial, sans-serif; }
+</style>
+
+<svg width="1600" height="1000" viewBox="0 0 1600 1000" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4a5348"/>
+    </marker>
+    <marker id="ad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8a6a3b"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#faf9f5"/>
+
+  <!-- ===== header ===== -->
+  <text x="46" y="52" font-size="29" font-weight="700" fill="#1b2019">INTERLOCK</text>
+  <text x="46" y="79" font-size="16" fill="#4a5348">Agent memory that lets parallel agents think for 40 seconds without corrupting each other's work.</text>
+  <text x="46" y="101" font-size="13" fill="#78806f">How your agent, AWS and CockroachDB interact.</text>
+
+  <!-- ===== PANEL 1 : YOUR SIDE ===== -->
+  <rect x="40" y="126" width="330" height="330" rx="14" fill="#ffffff" stroke="#cfd3c6" stroke-width="1.5"/>
+  <text x="62" y="154" font-size="11.5" font-weight="700" letter-spacing="1.4" fill="#6b7464">YOUR SIDE</text>
+
+  <rect x="62" y="170" width="286" height="84" rx="10" fill="#f2f4ec" stroke="#c3cbb6"/>
+  <text x="80" y="198" font-size="17" font-weight="600" fill="#232a20">Your agent</text>
+  <text x="80" y="221" font-size="13" fill="#5c6659">your models, your prompts,</text>
+  <text x="80" y="240" font-size="13" fill="#5c6659">your tools and framework</text>
+
+  <rect x="62" y="268" width="286" height="84" rx="10" fill="#f2f4ec" stroke="#c3cbb6"/>
+  <text x="80" y="296" font-size="17" font-weight="600" fill="#232a20">INTERLOCK SDK</text>
+  <text x="80" y="319" font-size="13" fill="#5c6659">dependency free client, or a</text>
+  <text x="80" y="338" font-size="13" fill="#5c6659">LangChain callback</text>
+
+  <rect x="62" y="366" width="286" height="70" rx="10" fill="#fdf6e8" stroke="#ddc48b"/>
+  <text x="80" y="392" font-size="13.5" font-weight="600" fill="#7a5e21">We never see your reasoning.</text>
+  <text x="80" y="414" font-size="12.5" fill="#8a7440">Only the intent, read set and</text>
+  <text x="80" y="430" font-size="12.5" fill="#8a7440">plan steps.</text>
+
+  <path d="M205,254 L205,268" stroke="#4a5348" stroke-width="2" marker-end="url(#a)"/>
+
+  <!-- ===== PANEL 2 : AWS ===== -->
+  <rect x="410" y="126" width="380" height="800" rx="14" fill="#ffffff" stroke="#cfd3c6" stroke-width="1.5"/>
+  <text x="432" y="154" font-size="11.5" font-weight="700" letter-spacing="1.4" fill="#6b7464">AWS</text>
+
+  <rect x="432" y="170" width="336" height="112" rx="10" fill="#eef1fa" stroke="#b9c3e0"/>
+  <text x="450" y="198" font-size="16.5" font-weight="600" fill="#232a20">AWS Lambda, public API</text>
+  <text x="450" y="221" font-size="12.5" fill="#5c6659">function URL, no API Gateway</text>
+  <text x="450" y="241" font-size="12.5" fill="#5c6659">declares intents, takes commits,</text>
+  <text x="450" y="261" font-size="12.5" fill="#5c6659">runs detection, enforces the ceiling</text>
+
+  <rect x="432" y="304" width="336" height="112" rx="10" fill="#eef1fa" stroke="#b9c3e0"/>
+  <text x="450" y="332" font-size="16.5" font-weight="600" fill="#232a20">Amazon Bedrock</text>
+  <text x="450" y="355" font-size="12.5" fill="#5c6659">Titan Embeddings V2, 1024 dim</text>
+  <text x="450" y="375" font-size="12.5" fill="#5c6659">Claude adjudicates, two tiers by role</text>
+  <text x="450" y="397" font-size="12.5" fill="#8a6a3b">called only when the graph cannot rule</text>
+
+  <rect x="432" y="452" width="336" height="112" rx="10" fill="#eef1fa" stroke="#b9c3e0"/>
+  <text x="450" y="480" font-size="16.5" font-weight="600" fill="#232a20">EventBridge and SQS</text>
+  <text x="450" y="503" font-size="12.5" fill="#5c6659">driven by a CockroachDB changefeed</text>
+  <text x="450" y="523" font-size="12.5" fill="#5c6659">async adjudication, dead letter queue</text>
+  <text x="450" y="543" font-size="12.5" fill="#5c6659">at least once delivery is safe here</text>
+
+  <rect x="432" y="586" width="336" height="92" rx="10" fill="#eef1fa" stroke="#b9c3e0"/>
+  <text x="450" y="614" font-size="16.5" font-weight="600" fill="#232a20">AWS Lambda, worker</text>
+  <text x="450" y="637" font-size="12.5" fill="#5c6659">capped at 20 concurrent by the SQS event</text>
+  <text x="450" y="657" font-size="12.5" fill="#5c6659">source mapping, so it cannot starve the API</text>
+
+  <rect x="432" y="700" width="336" height="92" rx="10" fill="#eef1fa" stroke="#b9c3e0"/>
+  <text x="450" y="728" font-size="16.5" font-weight="600" fill="#232a20">S3 and CloudFront</text>
+  <text x="450" y="751" font-size="12.5" fill="#5c6659">static demo site on a private origin,</text>
+  <text x="450" y="771" font-size="12.5" fill="#5c6659">read only by CloudFront via OAC</text>
+
+  <rect x="432" y="814" width="336" height="88" rx="10" fill="#fbfaf6" stroke="#cfd3c6"/>
+  <text x="450" y="840" font-size="11.5" font-weight="700" letter-spacing="1.2" fill="#6b7464">GUARDRAILS</text>
+  <text x="450" y="864" font-size="12.5" fill="#5c6659">AWS Budgets $20 cap, alerts at 50/80/100%</text>
+  <text x="450" y="884" font-size="12.5" fill="#5c6659">IAM scoped to 9 model ARNs, not bedrock:*</text>
+
+  <path d="M600,282 L600,304" stroke="#8a6a3b" stroke-width="2" marker-end="url(#ad)"/>
+  <path d="M600,564 L600,586" stroke="#4a5348" stroke-width="2" marker-end="url(#a)"/>
+  <path d="M432,632 L416,632 L416,360 L432,360" fill="none" stroke="#8a6a3b" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ad)"/>
+
+  <!-- SDK -> API -->
+  <path d="M348,300 L388,300 L388,226 L432,226" fill="none" stroke="#4a5348" stroke-width="2.4" marker-end="url(#a)"/>
+  <text x="382" y="294" font-size="12" font-weight="600" fill="#3f4a3c" text-anchor="end">declare, commit</text>
+
+  <!-- ===== PANEL 3 : COCKROACHDB ===== -->
+  <rect x="830" y="126" width="730" height="800" rx="14" fill="#ffffff" stroke="#8fa07f" stroke-width="2"/>
+  <text x="852" y="154" font-size="11.5" font-weight="700" letter-spacing="1.4" fill="#4d6340">COCKROACHDB</text>
+  <text x="1010" y="154" font-size="11.5" font-weight="600" fill="#6b7464">3 regions  ·  SURVIVE REGION FAILURE  ·  SERIALIZABLE by default</text>
+
+  <rect x="852" y="170" width="340" height="96" rx="10" fill="#f1f6ec" stroke="#a8bd97"/>
+  <text x="870" y="198" font-size="16.5" font-weight="600" fill="#232a20">intent</text>
+  <text x="870" y="221" font-size="12.5" fill="#5c6659">what the agent read and plans to do,</text>
+  <text x="870" y="241" font-size="12.5" fill="#5c6659">as text and as VECTOR 1024</text>
+  <text x="870" y="259" font-size="12" fill="#78806f">written before the agent acts</text>
+
+  <rect x="1208" y="170" width="330" height="96" rx="10" fill="#f1f6ec" stroke="#a8bd97"/>
+  <text x="1226" y="198" font-size="16.5" font-weight="600" fill="#232a20">resource</text>
+  <text x="1226" y="221" font-size="12.5" fill="#5c6659">the shared state agents contend over</text>
+  <text x="1226" y="241" font-size="12.5" fill="#5c6659">versioned, MVCC history retained</text>
+
+  <text x="852" y="300" font-size="11.5" font-weight="700" letter-spacing="1.2" fill="#6b7464">WHO IS THREATENED  ·  THREE PATHS, ONE QUERY, ONE SNAPSHOT</text>
+
+  <rect x="852" y="314" width="222" height="106" rx="10" fill="#f1f6ec" stroke="#a8bd97"/>
+  <text x="868" y="340" font-size="15.5" font-weight="600" fill="#232a20">exact</text>
+  <text x="868" y="363" font-size="12.5" fill="#5c6659">intents that read this</text>
+  <text x="868" y="382" font-size="12.5" fill="#5c6659">very row at an older</text>
+  <text x="868" y="401" font-size="12.5" fill="#5c6659">version</text>
+
+  <rect x="1088" y="314" width="222" height="106" rx="10" fill="#f1f6ec" stroke="#a8bd97"/>
+  <text x="1104" y="340" font-size="15.5" font-weight="600" fill="#232a20">graph</text>
+  <text x="1104" y="363" font-size="12.5" fill="#5c6659">recursive CTE walks</text>
+  <text x="1104" y="382" font-size="12.5" fill="#5c6659">provenance at step</text>
+  <text x="1104" y="401" font-size="12.5" fill="#5c6659">granularity</text>
+
+  <rect x="1324" y="314" width="214" height="106" rx="10" fill="#f1f6ec" stroke="#a8bd97"/>
+  <text x="1340" y="340" font-size="15.5" font-weight="600" fill="#232a20">vector</text>
+  <text x="1340" y="363" font-size="12.5" fill="#5c6659">C-SPANN index, partial</text>
+  <text x="1340" y="382" font-size="12.5" fill="#5c6659">and tenant prefixed, over</text>
+  <text x="1340" y="401" font-size="12.5" fill="#5c6659">plans still in flight</text>
+
+  <rect x="852" y="440" width="686" height="86" rx="10" fill="#f1f6ec" stroke="#a8bd97"/>
+  <text x="870" y="466" font-size="16.5" font-weight="600" fill="#232a20">AS OF SYSTEM TIME</text>
+  <text x="870" y="490" font-size="12.5" fill="#5c6659">Replays the exact snapshot the agent read, and diffs it against now.</text>
+  <text x="870" y="510" font-size="12.5" fill="#5c6659">This is how an agent is shown what moved underneath it while it was thinking.</text>
+
+  <rect x="852" y="546" width="686" height="86" rx="10" fill="#fdf6e8" stroke="#ddc48b"/>
+  <text x="870" y="572" font-size="16.5" font-weight="600" fill="#232a20">The graph rules first, for free</text>
+  <text x="870" y="596" font-size="12.5" fill="#7a5e21">If no plan step descends from the changed row, the verdict is irrelevant and</text>
+  <text x="870" y="616" font-size="12.5" fill="#7a5e21">no model is called at all. Only what is left over ever reaches Bedrock.</text>
+
+  <rect x="852" y="652" width="686" height="86" rx="10" fill="#f1f6ec" stroke="#a8bd97"/>
+  <text x="870" y="678" font-size="16.5" font-weight="600" fill="#232a20">adjudication</text>
+  <text x="870" y="702" font-size="12.5" fill="#5c6659">UNIQUE (commit_id, intent_id) makes exactly once structural.</text>
+  <text x="870" y="722" font-size="12.5" fill="#5c6659">A redelivery fails loudly instead of recording a second verdict.</text>
+
+  <rect x="852" y="758" width="686" height="144" rx="10" fill="#fbfaf6" stroke="#cfd3c6"/>
+  <text x="870" y="784" font-size="11.5" font-weight="700" letter-spacing="1.2" fill="#6b7464">ALSO LOAD BEARING</text>
+  <text x="870" y="810" font-size="12.5" fill="#5c6659">changefeeds drive the async pipeline  ·  row level TTL  ·  follower reads on the audit feed</text>
+  <text x="870" y="834" font-size="12.5" fill="#5c6659">per table gc.ttlseconds bounds how far back a diff can read  ·  three table localities</text>
+  <text x="870" y="858" font-size="12.5" fill="#5c6659">11 migrations  ·  15 tables  ·  roughly 1,900 intents and 1,600 provenance edges, growing with demo use</text>
+  <text x="870" y="884" font-size="12.5" fill="#5c6659">a partial vector index over live plans, selected at roughly 1,700 in flight</text>
+
+  <!-- API -> CRDB -->
+  <path d="M768,200 L806,200 L806,210 L852,210" fill="none" stroke="#4a5348" stroke-width="2.4" marker-end="url(#a)"/>
+  <path d="M768,230 L798,230 L798,367 L852,367" fill="none" stroke="#4a5348" stroke-width="2" marker-end="url(#a)"/>
+  <path d="M768,258 L790,258 L790,470 L852,470" fill="none" stroke="#4a5348" stroke-width="2" marker-end="url(#a)"/>
+
+  <!-- changefeed: resource -> queue, routed above the boxes then down the channel -->
+  <path d="M1370,170 L1370,160 L812,160 L812,508 L768,508" fill="none" stroke="#4a5348" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#a)"/>
+
+  <!-- worker -> adjudication -->
+  <path d="M768,632 L802,632 L802,690 L852,690" fill="none" stroke="#4a5348" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#a)"/>
+
+  <!-- site -> API -->
+  <path d="M432,746 L400,746 L400,254 L432,254" fill="none" stroke="#9aa392" stroke-width="1.5" stroke-dasharray="3 4" marker-end="url(#a)"/>
+
+  <!-- footer -->
+  <text x="46" y="956" font-size="13" fill="#4a5348">Correctness never rests on the model. The final write is a real SERIALIZABLE transaction, so a wrong ruling costs wasted work, never a lost update.</text>
+  <text x="46" y="978" font-size="12" fill="#8b9283">github.com/usv240/interlock   ·   d3dgn014prmcy8.cloudfront.net   ·   MIT</text>
+</svg>

@@ -1,0 +1,577 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Dark mode is ATTRIBUTE-driven, not media-only.
+   The toggle stamps data-theme="dark" | "light" on <html> and must win in
+   both directions; the media query only supplies the OS default.
+--------------------------------------------------------------------------- */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ===========================================================================
+   THE PALETTE
+
+   Two themes, designed rather than inverted. An inverted light theme is how
+   you get grey-on-grey dark mode and a dark theme that glares — the two need
+   opposite mechanisms for the same job.
+
+   DEPTH. Light mode signals elevation with shadow: a card floats above the
+   page and casts. Dark mode cannot — a shadow on a dark ground is invisible —
+   so it signals elevation with lightness instead, each surface a few percent
+   lighter than the one beneath. Same hierarchy, different physics.
+
+   NOT BLACK. Dark mode is built on a blue-leaning slate, not #000. Pure black
+   against near-white text is a higher contrast ratio than the eye settles into
+   over a long read, and it makes every surface above it read as grey haze.
+   Desaturated blue keeps the greys from going lifeless.
+
+   NOT WHITE EITHER. Light mode's page is a warm off-white and its cards are
+   pure white, so cards separate from the page by hue and luminance both,
+   before a single border is drawn.
+
+   The status ramp is fixed across themes and always paired with a label —
+   colour alone never carries a verdict.
+=========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* surfaces: page is warm and recessed, cards are white and lifted */
+  --page: #f6f5f1;
+  --page-2: #efeee9;
+  --surface: #ffffff;
+  --surface-2: #f4f3ef;
+  --surface-3: #eae8e2;
+
+  /* text: near-black with a trace of warmth, never #000
+   *
+   * Darkened after the light theme was reviewed on a real screen and read as
+   * washed out. --muted measured 3.96:1 on a white card, which fails WCAG AA
+   * for normal text outright, and --ink-2 passed on paper while still looking
+   * thin — see the font-smoothing note further down for why. */
+  --ink: #14151a;   /* 18.2:1 on white */
+  --ink-2: #3a3d44; /* was #4d5058 (8.1:1) → 10.3:1 */
+  --muted: #62666e; /* was #7c8089 (3.96:1, FAILED AA) → 5.5:1 */
+
+  --grid: #e2e0d9;
+  --baseline: #c5c3ba;
+  --border: rgba(20, 21, 26, 0.1);
+  --border-strong: rgba(20, 21, 26, 0.2);
+
+  /* emphasis: accent carries the point, muted is deliberate context */
+  --accent: #2563c9;
+  --accent-2: #6d3fd4;
+  --accent-ink: #ffffff;
+  --accent-soft: #dbe7fb;
+  --accent-glow: rgba(37, 99, 201, 0.16);
+  --success: #006300;
+
+  /* elevation: light mode casts. Two-layer shadows — a tight contact shadow
+     plus a wide ambient one — because a single blur reads as a smudge. */
+  --shadow-sm: 0 1px 2px rgba(20, 21, 26, 0.06), 0 1px 1px rgba(20, 21, 26, 0.04);
+  --shadow-md: 0 2px 4px rgba(20, 21, 26, 0.05), 0 6px 16px rgba(20, 21, 26, 0.07);
+  --shadow-lg: 0 4px 8px rgba(20, 21, 26, 0.06), 0 16px 40px rgba(20, 21, 26, 0.1);
+  --shadow-accent: 0 2px 6px rgba(37, 99, 201, 0.24), 0 10px 30px rgba(37, 99, 201, 0.18);
+
+  /* the ambient field behind the hero */
+  --aura-1: rgba(37, 99, 201, 0.12);
+  --aura-2: rgba(109, 63, 212, 0.09);
+  --aura-3: rgba(0, 153, 153, 0.07);
+
+  /* status — fixed, never themed, always paired with icon + label */
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
+}
+
+/* The dark palette, written twice on purpose: once for readers who never touch
+   the toggle (OS preference) and once for readers who do (attribute). CSS has
+   no way to share a token block between the two that does not break one of
+   them, and a token defined in only one place is a theme that half-applies. */
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+
+    --page: #0b0f17;
+    --page-2: #0e131d;
+    --surface: #141a26;
+    --surface-2: #1b2231;
+    --surface-3: #242c3d;
+
+    --ink: #e9edf5;
+    --ink-2: #a8b2c4;
+    --muted: #74809a;
+
+    --grid: #1e2534;
+    --baseline: #2d364a;
+    --border: rgba(190, 205, 235, 0.12);
+    --border-strong: rgba(190, 205, 235, 0.24);
+
+    --accent: #5c9dff;
+    --accent-2: #a78bfa;
+    --accent-ink: #08101f;
+    --accent-soft: #1d2c47;
+    --accent-glow: rgba(92, 157, 255, 0.22);
+    --success: #34d17c;
+
+    /* dark mode cannot cast; it lifts. These stay subtle and do the work of
+       separating a floating element from the surface directly under it. */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.45), 0 8px 24px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5), 0 24px 64px rgba(0, 0, 0, 0.45);
+    --shadow-accent: 0 2px 10px rgba(92, 157, 255, 0.3), 0 12px 40px rgba(92, 157, 255, 0.2);
+
+    --aura-1: rgba(92, 157, 255, 0.2);
+    --aura-2: rgba(167, 139, 250, 0.16);
+    --aura-3: rgba(45, 212, 191, 0.1);
+
+    --status-good: #3ddc7f;
+    --status-warning: #f5c451;
+    --status-serious: #f79b6d;
+    --status-critical: #f2686b;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --page: #0b0f17;
+  --page-2: #0e131d;
+  --surface: #141a26;
+  --surface-2: #1b2231;
+  --surface-3: #242c3d;
+
+  --ink: #e9edf5;
+  --ink-2: #a8b2c4;
+  --muted: #74809a;
+
+  --grid: #1e2534;
+  --baseline: #2d364a;
+  --border: rgba(190, 205, 235, 0.12);
+  --border-strong: rgba(190, 205, 235, 0.24);
+
+  --accent: #5c9dff;
+  --accent-2: #a78bfa;
+  --accent-ink: #08101f;
+  --accent-soft: #1d2c47;
+  --accent-glow: rgba(92, 157, 255, 0.22);
+  --success: #34d17c;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.45), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5), 0 24px 64px rgba(0, 0, 0, 0.45);
+  --shadow-accent: 0 2px 10px rgba(92, 157, 255, 0.3), 0 12px 40px rgba(92, 157, 255, 0.2);
+
+  --aura-1: rgba(92, 157, 255, 0.2);
+  --aura-2: rgba(167, 139, 250, 0.16);
+  --aura-3: rgba(45, 212, 191, 0.1);
+
+  --status-good: #3ddc7f;
+  --status-warning: #f5c451;
+  --status-serious: #f79b6d;
+  --status-critical: #f2686b;
+}
+
+/* Expose the roles to Tailwind so utilities like bg-surface / text-ink work. */
+@theme inline {
+  --color-page: var(--page);
+  --color-page-2: var(--page-2);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-grid: var(--grid);
+  --color-baseline: var(--baseline);
+  --color-hairline: var(--border);
+  --color-hairline-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-good: var(--status-good);
+  --color-warning: var(--status-warning);
+  --color-serious: var(--status-serious);
+  --color-critical: var(--status-critical);
+
+  --shadow-elev-sm: var(--shadow-sm);
+  --shadow-elev-md: var(--shadow-md);
+  --shadow-elev-lg: var(--shadow-lg);
+  --shadow-elev-accent: var(--shadow-accent);
+
+  --font-sans:
+    var(--font-inter), system-ui, -apple-system, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+  --font-mono:
+    var(--font-jetbrains), ui-monospace, SFMono-Regular, "SF Mono", Menlo,
+    Consolas, monospace;
+}
+
+/* ===========================================================================
+   BASE
+=========================================================================== */
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5.5rem;
+}
+
+body {
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  /* Long technical prose at a default tracking of 0 reads loose on screen. */
+  letter-spacing: -0.011em;
+}
+
+/**
+ * Antialiasing is a DARK-MODE-ONLY correction, not a global polish.
+ *
+ * Light text on a dark ground blooms, and `antialiased` is the standard fix.
+ * The same declaration on a light ground does the opposite of a favour: it
+ * turns off subpixel rendering, so every glyph loses roughly a tenth of its
+ * apparent weight and the whole page reads washed out — which is exactly how
+ * this looked before, at contrast ratios that passed on paper.
+ *
+ * So it is scoped. Dark mode keeps the correction; light mode keeps its stems.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+:root[data-theme="dark"] body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Display type wants tighter tracking than body text — the larger the size,
+   the more the default spacing shows as gaps. */
+h1,
+h2,
+h3 {
+  letter-spacing: -0.028em;
+  /* Even out the ragged edge so a heading never leaves one word alone on the
+     last line. Ignored by browsers that do not support it, which is fine. */
+  text-wrap: balance;
+}
+
+/* Body copy gets the weaker version: no orphaned last word, but no reflow of
+   the whole paragraph either. */
+p {
+  text-wrap: pretty;
+}
+
+/* Visible keyboard focus everywhere — never remove the ring. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Columns that must align vertically get tabular figures; standalone
+   display numbers keep proportional figures (see dataviz § typeface). */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===========================================================================
+   COMPONENTS
+
+   Written as plain classes rather than repeated utility strings. A button that
+   appears in six places should be one decision, not six copies of it.
+
+   IN @layer components, WHICH IS NOT COSMETIC. Unlayered rules beat layered
+   ones, so defining `.btn { display: inline-flex }` outside a layer makes it
+   win against Tailwind's `.hidden` — and `class="btn hidden sm:inline-flex"`
+   then stays visible at every width. That is exactly what happened: the nav's
+   primary button refused to hide on mobile and pushed the header wider than
+   the viewport, giving the whole page a horizontal scrollbar.
+=========================================================================== */
+
+@layer components {
+
+/* --- buttons ------------------------------------------------------------ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.625rem;
+  padding: 0.625rem 1.125rem;
+  font-size: 0.875rem;
+  font-weight: 550;
+  letter-spacing: -0.012em;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition:
+    transform 0.14s cubic-bezier(0.2, 0, 0.2, 1),
+    box-shadow 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  /* A gradient rather than a flat fill: the primary action should be the one
+     thing on the page that looks lit from within. */
+  background-image: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 130%);
+  color: var(--accent-ink);
+  box-shadow: var(--shadow-accent);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow:
+    var(--shadow-accent),
+    0 0 0 4px var(--accent-glow);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--surface-2);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--ink-2);
+  border-color: var(--border);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.btn-lg {
+  padding: 0.8125rem 1.5rem;
+  font-size: 0.9375rem;
+  border-radius: 0.75rem;
+}
+
+/* --- surfaces ----------------------------------------------------------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.875rem;
+  box-shadow: var(--shadow-sm);
+  transition:
+    box-shadow 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+/* Only interactive cards lift. A card that moves when you pass over it but
+   does nothing when you click is a lie about what it is. */
+.card-interactive:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+}
+
+/* A hairline of accent along the top edge, for the one card that matters. */
+.card-accent {
+  position: relative;
+  overflow: hidden;
+}
+
+.card-accent::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    var(--accent) 30%,
+    var(--accent-2) 70%,
+    transparent
+  );
+  opacity: 0.9;
+}
+
+/* --- the hero field ----------------------------------------------------- */
+
+/* Three soft radial washes, offset from each other so the overlaps read as
+   depth rather than as one blurry circle. Sits behind everything and never
+   takes pointer events. */
+.aura {
+  position: absolute;
+  inset: -20% -10% auto -10%;
+  height: 780px;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(46% 42% at 18% 8%, var(--aura-1) 0%, transparent 70%),
+    radial-gradient(40% 46% at 82% 0%, var(--aura-2) 0%, transparent 72%),
+    radial-gradient(38% 38% at 52% 34%, var(--aura-3) 0%, transparent 70%);
+  /* Fades out downward so the field never ends on a visible edge. */
+  mask-image: linear-gradient(to bottom, #000 0%, #000 46%, transparent 100%);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 46%,
+    transparent 100%
+  );
+}
+
+/* A faint engineering grid under the hero. The product is about coordination
+   on a shared surface; the surface may as well be visible. */
+.gridlines {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 620px;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(to right, var(--grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+  background-size: 64px 64px;
+  opacity: 0.5;
+  mask-image: radial-gradient(72% 58% at 50% 12%, #000 0%, transparent 100%);
+  -webkit-mask-image: radial-gradient(
+    72% 58% at 50% 12%,
+    #000 0%,
+    transparent 100%
+  );
+}
+
+/* --- text accents ------------------------------------------------------- */
+
+.text-gradient {
+  background-image: linear-gradient(120deg, var(--ink) 20%, var(--accent) 62%, var(--accent-2) 96%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Small uppercase labels that introduce a section. */
+.eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* --- pills -------------------------------------------------------------- */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4375rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0.3125rem 0.75rem;
+  font-size: 0.75rem;
+  color: var(--ink-2);
+  box-shadow: var(--shadow-sm);
+}
+
+.pill-dot {
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 999px;
+  background: var(--status-good);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-good) 22%, transparent);
+}
+
+/* A dot that breathes, for anything genuinely live. */
+@keyframes pulse-dot {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-good) 22%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--status-good) 6%, transparent);
+  }
+}
+
+.pill-dot-live {
+  animation: pulse-dot 2.4s ease-in-out infinite;
+}
+
+/* --- scrollbars --------------------------------------------------------- */
+
+.scroll-slim {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.scroll-slim::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.scroll-slim::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+
+.scroll-slim::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* --- entrance ----------------------------------------------------------- */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rise {
+  animation: rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+} /* @layer components */
+
+/* No global `overflow-x: clip` here, though it is the usual reflex for a page
+   that scrolls sideways. On the root element it made anchor navigation land on
+   a blank screen — #benchmark scrolled somewhere with nothing painted. The
+   sideways scroll had one cause (see the @layer note above) and it is fixed at
+   the cause; a guard that breaks navigation is not a guard. */

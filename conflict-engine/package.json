@@ -1,0 +1,59 @@
+{
+  "name": "interlock",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Agent memory that lets parallel agents think for 40 seconds without corrupting each other's work.",
+  "license": "MIT",
+  "scripts": {
+    "db:check": "node scripts/db-check.js",
+    "db:verify": "node scripts/db-verify.js",
+    "db:migrate": "node scripts/migrate.js",
+    "db:reset": "node scripts/migrate.js --reset",
+    "ai:probe": "node scripts/bedrock-probe.js",
+    "demo": "node scripts/demo.js",
+    "ai:vector": "node scripts/vector-probe.js",
+    "ai:calibrate": "node scripts/distance-calibrate.js",
+    "demo:clear": "node scripts/clear-state.js",
+    "bench": "node bench/run.js",
+    "bench:sweep": "node bench/sweep.js",
+    "chaos": "node bench/chaos.js",
+    "continuity": "node agents/continuity.js",
+    "mcp": "node agents/mcp.js",
+    "rotate": "node scripts/rotate-credentials.js",
+    "deploy": "node scripts/deploy.js",
+    "api:build": "node api/build.mjs",
+    "api:deploy": "node api/deploy.mjs",
+    "test:isolation": "node scripts/test-isolation.js",
+    "cdc:start": "node scripts/cdc.js start",
+    "cdc:stop": "node scripts/cdc.js stop",
+    "cdc:status": "node scripts/cdc.js status",
+    "pipeline": "node scripts/pipeline-status.js",
+    "test:stranger": "node scripts/test-as-stranger.js",
+    "sync:env": "node scripts/sync-lambda-env.js",
+    "seed:corpus": "node scripts/seed-corpus.js",
+    "example:langchain": "node sdk/example-langchain.js",
+    "test:sdk": "node scripts/test-sdk.js",
+    "quickstart": "node scripts/quickstart.js",
+    "test:tiers": "node scripts/test-tiers.js",
+    "verify": "node scripts/verify-key.js",
+    "compare": "node scripts/compare.js",
+    "submission:check": "node scripts/submission-check.js",
+    "revoke:key": "node scripts/revoke-key.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1107.0",
+    "@aws-sdk/credential-providers": "^3.1107.0",
+    "dotenv": "^17.2.3",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-eventbridge": "^3.1109.0",
+    "@langchain/core": "^1.2.7",
+    "esbuild": "^0.28.2"
+  },
+  "exports": {
+    ".": "./sdk/client.js",
+    "./langchain": "./sdk/langchain.js"
+  }
+}

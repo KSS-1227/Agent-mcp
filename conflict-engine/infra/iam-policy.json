@@ -1,0 +1,72 @@
+{
+  "Version": "2012-10-17",
+  "Id": "interlock-runtime-least-privilege",
+  "Statement": [
+    {
+      "Sid": "InvokeOnlyTheModelsActuallyGranted",
+      "Effect": "Allow",
+      "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+      "Resource": [
+        "arn:aws:bedrock:us-east-1::foundation-model/amazon.titan-embed-text-v2:0",
+        "arn:aws:bedrock:us-east-1:957325809861:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0",
+        "arn:aws:bedrock:us-east-1:957325809861:inference-profile/us.anthropic.claude-sonnet-4-6",
+        "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0",
+        "arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0",
+        "arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0",
+        "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-6",
+        "arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-6",
+        "arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6"
+      ]
+    },
+    {
+      "Sid": "ReadModelCatalogueForThePreflightProbe",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:ListFoundationModels",
+        "bedrock:ListInferenceProfiles",
+        "bedrock:GetFoundationModel"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "WriteEvidenceBundlesOnly",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject"],
+      "Resource": "arn:aws:s3:::interlock-evidence-957325809861/adjudications/*"
+    },
+    {
+      "Sid": "EmitOwnMetricsAndLogs",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:PutMetricData",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": { "cloudwatch:namespace": "INTERLOCK" }
+      }
+    },
+    {
+      "Sid": "NeverDeleteEvidence",
+      "Effect": "Deny",
+      "Action": [
+        "s3:DeleteObject",
+        "s3:DeleteObjectVersion",
+        "s3:PutBucketPolicy",
+        "s3:PutObjectRetention"
+      ],
+      "Resource": "arn:aws:s3:::interlock-evidence-957325809861/*"
+    },
+    {
+      "Sid": "NeverTouchTheModelAccessConfiguration",
+      "Effect": "Deny",
+      "Action": [
+        "bedrock:PutFoundationModelEntitlement",
+        "bedrock:PutModelInvocationLoggingConfiguration",
+        "bedrock:DeleteModelInvocationLoggingConfiguration"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
