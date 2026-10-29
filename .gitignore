@@ -1,0 +1,44 @@
+# Secrets — broad by design; re-admit only the template
+.env*
+!.env.example
+*.pem
+*.key
+*.p12
+credentials.json
+
+# Dependencies and build output
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+out/
+**/out/
+dist/
+**/dist/
+*.tsbuildinfo
+
+# Compiler scratch directories
+**/.tmp-cjs/
+**/.tmp-run/
+
+# Logs and captured output
+*.log
+*.log.*
+*.txt
+
+# Test artefacts
+coverage/
+**/coverage/
+
+# Separately published upstream repositories.
+# conflict-engine and recovery-engine keep their own history and remotes
+# (usv240/interlock, virajchogle/anchor) and are never pushed here.
+conflict-engine/
+recovery-engine/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp

@@ -1,0 +1,3 @@
+# Migration files are stored in this directory
+# Naming convention: YYYYMMDDHHMMSS_description.sql
+# Each migration is executed in chronological order

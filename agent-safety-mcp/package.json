@@ -1,0 +1,47 @@
+{
+    "scripts": {
+        "build": "tsc && esbuild src/start-server.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/start-server.js",
+        "demo": "tsx scripts/demo.ts",
+        "start": "node dist/start-server.js",
+        "db:seed": "tsx scripts/demo.ts --seed-only",
+        "typecheck": "tsc --noEmit",
+        "test": "vitest",
+        "db:migrate": "tsx src/scripts/run-migrations.ts",
+        "test:run": "vitest --run",
+        "dev": "tsx watch src/start-server.ts",
+        "test:phase10d": "vitest --run tests/integration/phase-10d-postgres-safety.test.ts"
+    },
+    "description": "Unified agent safety layer with conflict detection and crash-safe action recovery",
+    "type": "module",
+    "version": "0.1.0",
+    "author": "",
+    "name": "agent-safety-mcp",
+    "main": "dist/index.js",
+    "license": "MIT",
+    "devDependencies": {
+        "@types/node": "^20.10.0",
+        "@types/pg": "^8.11.0",
+        "@types/uuid": "^9.0.7",
+        "esbuild": "^0.28.2",
+        "tsx": "^4.7.0",
+        "typescript": "^5.3.3",
+        "vitest": "^1.1.0"
+    },
+    "dependencies": {
+        "@aws-sdk/client-bedrock-runtime": "^3.1107.0",
+        "@modelcontextprotocol/sdk": "^1.0.0",
+        "@supabase/supabase-js": "^2.38.0",
+        "dotenv": "^17.2.3",
+        "jose": "^6.2.13",
+        "pg": "^8.16.3",
+        "uuid": "^9.0.1"
+    },
+    "keywords": [
+        "mcp",
+        "agent",
+        "conflict",
+        "action",
+        "safety",
+        "supabase"
+    ]
+}

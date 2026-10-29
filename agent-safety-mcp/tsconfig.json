@@ -1,0 +1,29 @@
+﻿{
+    "include":  [
+                    "src/**/*"
+                ],
+    "exclude":  [
+                    "node_modules",
+                    "dist",
+                    "tests"
+                ],
+    "compilerOptions":  {
+                            "moduleDetection":  "force",
+                            "outDir":  "./dist",
+                            "declaration":  false,
+                            "module":  "ES2020",
+                            "forceConsistentCasingInFileNames":  true,
+                            "skipLibCheck":  true,
+                            "strict":  true,
+                            "target":  "ES2020",
+                            "rootDir":  "./src",
+                            "allowImportingTsExtensions":  false,
+                            "esModuleInterop":  true,
+                            "moduleResolution":  "node",
+                            "lib":  [
+                                        "ES2020"
+                                    ],
+                            "resolveJsonModule":  true,
+                            "sourceMap":  true
+                        }
+}
