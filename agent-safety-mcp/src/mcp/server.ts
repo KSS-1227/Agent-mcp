@@ -234,7 +234,8 @@ export async function createMCPServer() {
     tools: toolDefs,
   }));
 
-  (server as any)._requestHandlers.set("tools/call", async (params: any) => {
+  (server as any)._requestHandlers.set("tools/call", async (request: any) => {
+    const params = request.params;
     const handler = handlers.get(params.name);
     if (!handler) throw new Error(`Tool not found: ${params.name}`);
 
