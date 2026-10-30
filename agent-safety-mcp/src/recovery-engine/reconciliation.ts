@@ -7,6 +7,7 @@ import { Pool } from "pg";
 import { Action, ActionState, EffectState, ReconciliationStats, VerdictDisposition, Verdict } from "./types";
 import { ActionCoordinator } from "./coordinator";
 import { recordRecoveryFailure, recordRecoveryPass, setRecoveryRuntimeHealth } from "../health/recovery-runtime";
+import type { EmbeddingIdentity } from "./embedding-identity";
 
 export const CLAIM_EXPIRED = `
 WITH claimable AS (
@@ -79,6 +80,7 @@ export interface ActionVerifier {
  * Embedder interface for converting text to vectors
  */
 export interface Embedder {
+  readonly identity: EmbeddingIdentity;
   embed(text: string): Promise<number[]>;
 }
 
@@ -259,6 +261,14 @@ export class ActionReconciler {
           // effect APPLIED. The persisted episodes.embedding column is vector(1024).
           const narrative = this.recoveredNarrative(action, verdict);
           const embedding = await this.embedder.embed(narrative);
+          const identity = this.embedder?.identity;
+          if (!identity || typeof identity.provider !== "string" || typeof identity.model !== "string") {
+            throw new Error("Recovery embedder did not provide embedding provenance");
+          }
+          const { provider, model } = identity;
+          if (!provider?.trim() || !model?.trim()) {
+            throw new Error("Recovery embedder did not provide embedding provenance");
+          }
           if (
             !Array.isArray(embedding) ||
             embedding.length !== EPISODE_EMBEDDING_DIMENSIONS ||
@@ -282,7 +292,7 @@ export class ActionReconciler {
             observedEffectState = EffectState.Applied;
           }
           // Commit the recovered action
-          await this.commitRecovered(action, verdict, narrative, embedding, worldEffect);
+          await this.commitRecovered(action, verdict, narrative, embedding, { provider, model }, worldEffect);
           break;
         }
 
@@ -388,6 +398,7 @@ export class ActionReconciler {
     verdict: Verdict,
     narrative: string,
     embedding: number[],
+    embeddingIdentity: EmbeddingIdentity,
     worldEffect?: any
   ): Promise<void> {
     const externalRef = verdict.externalRef || action.externalRef;
@@ -405,6 +416,8 @@ export class ActionReconciler {
         narrative,
         outcome: "recovered",
         embedding,
+        embeddingProvider: embeddingIdentity.provider,
+        embeddingModel: embeddingIdentity.model,
       },
     });
   }

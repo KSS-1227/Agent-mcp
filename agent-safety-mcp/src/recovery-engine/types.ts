@@ -207,6 +207,8 @@ export interface MemoryWrite {
   narrative: string;
   outcome: string;
   embedding: number[];
+  embeddingProvider: string;
+  embeddingModel: string;
 }
 
 /**

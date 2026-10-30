@@ -85,6 +85,7 @@ SELECT narrative, outcome, status
   FROM episodes
  WHERE episode_id = $1 AND status = 'resolved' AND outcome = $2
    AND narrative = $3 AND embedding = $4::vector
+   AND embedding_provider = $5 AND embedding_model = $6
  FOR UPDATE`;
 
 const MUTATE_CLUSTER = `
@@ -97,6 +98,7 @@ UPDATE managed_clusters
 const WRITE_MEMORY = `
 UPDATE episodes
    SET narrative = $2, outcome = $3, embedding = $4,
+       embedding_provider = $5, embedding_model = $6,
        status = 'resolved', expires_at = NULL
  WHERE episode_id = $1`;
 
@@ -842,6 +844,8 @@ export class ActionCoordinator {
             commit.memoryWrite.outcome,
             commit.memoryWrite.narrative,
             JSON.stringify(commit.memoryWrite.embedding),
+            commit.memoryWrite.embeddingProvider,
+            commit.memoryWrite.embeddingModel,
           ]);
           if (!memory.rows[0]) {
             throw new Error(
@@ -875,6 +879,8 @@ export class ActionCoordinator {
           commit.memoryWrite.narrative,
           commit.memoryWrite.outcome,
           JSON.stringify(commit.memoryWrite.embedding),
+          commit.memoryWrite.embeddingProvider,
+          commit.memoryWrite.embeddingModel,
         ]);
         if ((memoryResult.rowCount ?? 0) === 0) {
           throw new Error(`Episode ${commit.memoryWrite.episodeId} does not exist; recovery memory was not written`);

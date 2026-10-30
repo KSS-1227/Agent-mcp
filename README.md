@@ -101,7 +101,7 @@ flowchart LR
     C -.->|"only when the graph cannot rule"| L["Adjudicator<br/>Nemotron · Grok · Nebius · NVIDIA · none"]
     P -->|"github.create_issue"| X["External system<br/>GitHub REST API"]
     R -->|"outcome query by correlation marker"| X
-    R -->|"episode embeddings"| O["Amazon Bedrock Titan Text Embeddings V2<br/>1024 dimensions"]
+    R -->|"episode embeddings (1024 dimensions)"| O["Selected recovery embedder<br/>Cloudflare BGE-M3 or Bedrock Titan"]
     H --> DB
 ```
 
@@ -429,7 +429,10 @@ The health server listens on `HEALTH_PORT` (8081) for both transports.
 | `HF_TOKEN` | Optional | Hugging Face bearer token for endpoints that require authentication; keep server-side and out of frontend variables. |
 | `BEDROCK_API_KEY` | Optional | Credential for the existing AWS Bedrock Mantle Grok 4.3 integration. `GROK_REASONING_EFFORT` and `GROK_TIMEOUT_MS` retain their existing behavior. |
 | `NEBIUS_API_KEY` / `NVIDIA_API_KEY` | Optional | Credentials for their respective optional chat providers. A selected provider failure retains deterministic conflict handling. |
-| `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `BEDROCK_MODEL_EMBEDDINGS` | Optional | Existing AWS SDK credentials/region and Titan Text Embeddings V2 model used for recovery episode vectors. Titan continues to emit 1024 dimensions for the existing pgvector columns. |
+| `EMBEDDING_PROVIDER` | Optional | Recovery embeddings provider: `cloudflare` or `titan`; defaults to `titan` when unset. Providers are explicitly selected and failures do not trigger fallback. |
+| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` | Required for Cloudflare | Server-side credentials for Cloudflare Workers AI. Grant access to run Workers AI models. |
+| `CLOUDFLARE_EMBEDDING_MODEL` | Optional | Cloudflare model; defaults to `@cf/baai/bge-m3`. |
+| `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `BEDROCK_MODEL_EMBEDDINGS` | Required for Titan when selected | AWS SDK credentials/region and Titan Text Embeddings V2 model used for recovery episode vectors. Defaults to region `us-east-1` and model `amazon.titan-embed-text-v2:0`. |
 | `NEBIUS_BASE_URL`, `*_MODEL`, `*_TIMEOUT_MS`, `*_MAX_OUTPUT_TOKENS` | Optional | Other provider endpoints and limits. |
 | `SEMANTIC_THRESHOLD`, `SEMANTIC_K` | Optional | Vector similarity cutoff (`0.58`) and neighbour count (`10`). |
 | `GITHUB_TOKEN` | Optional | Required by `execute_github_issue` and production verification. Use a fine-grained token scoped only to the configured repository; issue creation requires Issues: write and verifier lookup requires Issues: read. |
@@ -441,6 +444,20 @@ The health server listens on `HEALTH_PORT` (8081) for both transports.
 
 Secrets are never logged, and startup validation reports missing variables without
 echoing their values.
+
+### Embedding provenance and historical data
+
+Migration `20240101000018_embedding_provenance.sql` adds provider/model provenance
+to `episodes.embedding` and `intents.embedding` without changing their 1024-dimensional
+vectors or cosine indexes. Existing vectors are marked `legacy` / `unverified` and
+are excluded from provider-specific similarity searches until re-embedded. To move
+historical narratives and intent statements into BGE-M3 space, apply the migration,
+configure `EMBEDDING_PROVIDER=cloudflare` and the Cloudflare credentials above, then
+run `npm run embeddings:reindex` from `agent-safety-mcp`. The command verifies the
+selected provider first, then updates each vector and its provenance atomically using
+a compare-and-set. It preserves narratives, action evidence, outcomes, and status;
+rerunning after interruption safely resumes records that are not yet on the selected
+provider/model. Titan and BGE-M3 vectors are never compared as one space.
 
 ---
 
@@ -485,7 +502,7 @@ kept, what changed, and what was intentionally left behind.
 | **Database** | CockroachDB: `SERIALIZABLE`, `AS OF SYSTEM TIME`, C-SPANN vector index, TTL, multi-region survival | PostgreSQL + pgvector on Supabase; replay by resource-version comparison instead of time travel |
 | **Action surface** | `ccloud` CLI: scoped diagnostic SQL users | `github.create_issue` through the GitHub REST API |
 | **Verification** | `ccloud audit list`, matched on a username derived from the idempotency key | Paginated GitHub issue listing, matched on a correlation marker in the issue body; an incomplete listing yields `UNKNOWN` |
-| **Embeddings** | Bedrock Titan Text Embeddings V2, 1024 dimensions | `episodes.embedding` / `intents.embedding` at 1024 dimensions; adjudication providers are pluggable |
+| **Embeddings** | Cloudflare Workers AI BGE-M3 or Bedrock Titan Text Embeddings V2, 1024 dimensions | Existing `episodes.embedding` / `intents.embedding` pgvector contract remains 1024 dimensions; recovery provider is explicitly selected |
 | **Concurrency** | Out of scope | Conflict engine added (declare/watch/diff/adjudicate) with a deterministic gate inside `prepare_action` |
 | **Identity and authorization** | Scope isolation in SQL, Secrets Manager for credentials | JWT verification, user→agent mapping, per-tool fail-closed authorization, system-only tool set |
 | **Schema** | 6 tables | 13 application tables across 18 migrations, including effect-state columns, verifier evidence, resource-version snapshots, and an external-effect test ledger |

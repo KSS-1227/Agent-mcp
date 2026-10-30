@@ -75,6 +75,12 @@ tests/*
 !tests/mcp/
 tests/mcp/*
 !tests/mcp/render-http.test.ts
+!tests/recovery-engine/
+tests/recovery-engine/*
+!tests/recovery-engine/cloudflare-embedder.test.ts
+!tests/conflict-engine/
+tests/conflict-engine/*
+!tests/conflict-engine/embedding-provenance.test.ts
 
 # Captured output (verification logs and reports, not source)
 *.txt

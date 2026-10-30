@@ -8,11 +8,14 @@
  */
 
 import { DatabaseClient } from "../database/client";
+import type { EmbeddingIdentity } from "../recovery-engine/embedding-identity";
+import { assertActiveEmbeddingIdentity } from "../recovery-engine/embedding-identity";
+import { EPISODE_EMBEDDING_DIMENSIONS } from "../recovery-engine/reconciliation";
 
 /**
  * Find similar intents using pgvector cosine distance
  * 
- * @param embedding - Query embedding vector (1536 dimensions for Titan)
+ * @param embedding - Query embedding vector (1024 dimensions for the selected provider/model)
  * @param db - DatabaseClient instance
  * @param threshold - Cosine distance threshold (lower = more similar)
  * @param limit - Maximum number of results
@@ -21,12 +24,16 @@ import { DatabaseClient } from "../database/client";
 export async function findSimilarIntents(
   embedding: number[],
   db: DatabaseClient,
+  identity: EmbeddingIdentity,
   threshold: number = 0.3,
   limit: number = 10
 ): Promise<Array<{ intentId: string; similarity: number }>> {
   if (!embedding || embedding.length === 0) {
     return [];
   }
+  assertActiveEmbeddingIdentity(identity);
+  if (embedding.length !== EPISODE_EMBEDDING_DIMENSIONS ||
+      !embedding.every((value) => typeof value === "number" && Number.isFinite(value))) return [];
 
   // Vector should be represented as a string for PostgreSQL pgvector
   const embeddingStr = `[${embedding.join(",")}]`;
@@ -37,17 +44,19 @@ export async function findSimilarIntents(
       1 - (embedding <=> $1::vector) as similarity
     FROM intents
     WHERE embedding IS NOT NULL
+      AND embedding_provider = $2
+      AND embedding_model = $3
       AND status IN ('DECLARED', 'ACTIVE')
-      AND (embedding <=> $1::vector) <= $2
+      AND (embedding <=> $1::vector) <= $4
     ORDER BY embedding <=> $1::vector ASC
-    LIMIT $3
+    LIMIT $5
   `;
 
   try {
     const result = await db.query<{
       intent_id: string;
       similarity: number;
-    }>(query, [embeddingStr, threshold, limit]);
+    }>(query, [embeddingStr, identity.provider, identity.model, threshold, limit]);
 
     return result.rows.map((row) => ({
       intentId: row.intent_id,
@@ -70,22 +79,28 @@ export async function findSimilarIntents(
 export async function storeIntentEmbedding(
   intentId: string,
   embedding: number[],
-  db: DatabaseClient
+  db: DatabaseClient,
+  identity: EmbeddingIdentity
 ): Promise<void> {
   if (!embedding || embedding.length === 0) {
     return;
+  }
+  assertActiveEmbeddingIdentity(identity);
+  if (embedding.length !== EPISODE_EMBEDDING_DIMENSIONS ||
+      !embedding.every((value) => typeof value === "number" && Number.isFinite(value))) {
+    throw new Error(`Intent embedding must contain exactly ${EPISODE_EMBEDDING_DIMENSIONS} finite values`);
   }
 
   const embeddingStr = `[${embedding.join(",")}]`;
 
   const query = `
     UPDATE intents
-    SET embedding = $1::vector
+    SET embedding = $1::vector, embedding_provider = $3, embedding_model = $4
     WHERE id = $2
   `;
 
   try {
-    await db.query(query, [embeddingStr, intentId]);
+    await db.query(query, [embeddingStr, intentId, identity.provider, identity.model]);
   } catch (error) {
     console.warn("Failed to store embedding:", error);
   }
