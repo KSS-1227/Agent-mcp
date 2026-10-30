@@ -57,9 +57,9 @@ export async function verifySupabaseJWT(token: string): Promise<VerifiedJWT> {
 
     // Verify JWT: signature, expiry, issuer
     const verified = await jwtVerify(token, jwks, {
-      issuer: supabaseUrl,
+      issuer: `${supabaseUrl.replace(/\/+$/, "")}/auth/v1`,
       audience: "authenticated", // Supabase default audience
-      algorithms: ["RS256"],
+      algorithms: ["ES256", "RS256"],
     });
 
     const sub = verified.payload.sub as string;
