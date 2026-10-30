@@ -29,6 +29,38 @@ interface AuthenticatedRequest {
   agentId: string;
 }
 
+interface MCPServerInternals {
+  _serverInfo: { name: string; version: string };
+  _capabilities: Record<string, unknown>;
+  _instructions?: string;
+  _requestHandlers: Map<string, (...args: any[]) => any>;
+  _notificationHandlers: Map<string, (...args: any[]) => any>;
+  fallbackRequestHandler?: (...args: any[]) => any;
+  fallbackNotificationHandler?: (...args: any[]) => any;
+}
+
+function createStatelessRequestServer(template: Server): Server {
+  const source = template as unknown as MCPServerInternals;
+  const requestServer = new Server(source._serverInfo, {
+    capabilities: source._capabilities,
+    instructions: source._instructions,
+  });
+  const target = requestServer as unknown as MCPServerInternals;
+
+  // The installed SDK's stateless Streamable HTTP transport is single-request
+  // by design. Copy the registered handlers to a fresh Protocol instance for
+  // each request while retaining the template's service/database closures.
+  for (const [method, handler] of source._requestHandlers) {
+    if (method !== "initialize") target._requestHandlers.set(method, handler);
+  }
+  for (const [method, handler] of source._notificationHandlers) {
+    if (method !== "notifications/initialized") target._notificationHandlers.set(method, handler);
+  }
+  target.fallbackRequestHandler = source.fallbackRequestHandler;
+  target.fallbackNotificationHandler = source.fallbackNotificationHandler;
+  return requestServer;
+}
+
 /**
  * Verify JWT and extract authenticated identity
  * Called before tool handler dispatch
@@ -64,10 +96,6 @@ export async function createHTTPMCPServer(
   db: DatabaseClient,
   port: number = 8080
 ): Promise<http.Server> {
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined, // Stateless mode
-  });
-
   const httpServer = http.createServer(async (req, res) => {
     // Render exposes one service port. Serve health checks on this same listener
     // while preserving the existing unauthenticated health endpoint semantics.
@@ -88,6 +116,15 @@ export async function createHTTPMCPServer(
     }
 
     if (req.method !== "POST") {
+      res.writeHead(404);
+      res.end(JSON.stringify({ error: "Not found" }));
+      return;
+    }
+
+    // The MCP endpoint is mounted at /mcp. Rejecting every other path before
+    // authentication keeps the server from answering (or auth-probing) routes
+    // it does not own.
+    if (req.url !== "/mcp") {
       res.writeHead(404);
       res.end(JSON.stringify({ error: "Not found" }));
       return;
@@ -131,11 +168,27 @@ export async function createHTTPMCPServer(
             jsonBody.params.arguments = toolArguments;
           }
 
-          await transport.handleRequest(req, res, jsonBody);
+          const requestServer = createStatelessRequestServer(mcpServer);
+          const transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: undefined, // Stateless mode
+            enableJsonResponse: true,
+          });
+          try {
+            // Connect each fresh stateless SDK transport exactly once before
+            // dispatching its one request; the SDK rejects transport reuse.
+            await requestServer.connect(transport);
+            await transport.handleRequest(req, res, jsonBody);
+          } finally {
+            await requestServer.close().catch(() => undefined);
+          }
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unknown error";
-          res.writeHead(400);
-          res.end(JSON.stringify({ error: message }));
+          if (!res.headersSent) {
+            res.writeHead(400);
+            res.end(JSON.stringify({ error: message }));
+          } else {
+            res.destroy(error instanceof Error ? error : undefined);
+          }
         }
       });
     } catch (error) {
@@ -157,16 +210,20 @@ export async function createHTTPMCPServer(
     }
   });
 
-  return new Promise((resolve, reject) => {
-    httpServer.listen(port, "0.0.0.0", () => {
+  return new Promise<http.Server>((resolve, reject) => {
+    const onListening = () => {
+      httpServer.off("listening", onListening);
       console.error(`[MCP HTTP] Authenticated HTTP server listening on port ${port}`);
       resolve(httpServer);
-    });
-
-    httpServer.on("error", (err) => {
+    };
+    const onError = (err: Error) => {
+      httpServer.off("listening", onListening);
       console.error(`[MCP HTTP] Server error: ${err.message}`);
       reject(err);
-    });
+    };
+    httpServer.once("listening", onListening);
+    httpServer.on("error", onError);
+    httpServer.listen(port, "0.0.0.0");
   });
 }
 
