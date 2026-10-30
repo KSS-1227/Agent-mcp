@@ -32,7 +32,7 @@ function request(
   method = "GET",
   body?: unknown,
   authorization: string | null = body === undefined ? null : "Bearer test-token"
-): Promise<{ status: number; body: any }> {
+): Promise<{ status: number; body: any; headers: http.IncomingHttpHeaders }> {
   if (!httpServer) throw new Error("HTTP server has not started");
   const address = httpServer.address() as AddressInfo;
   return new Promise((resolve, reject) => {
@@ -51,7 +51,11 @@ function request(
       let data = "";
       res.setEncoding("utf8");
       res.on("data", (chunk) => { data += chunk; });
-      res.on("end", () => resolve({ status: res.statusCode || 0, body: data ? JSON.parse(data) : undefined }));
+      res.on("end", () => resolve({
+        status: res.statusCode || 0,
+        body: data ? JSON.parse(data) : undefined,
+        headers: res.headers,
+      }));
     });
     req.on("error", reject);
     if (body !== undefined) req.write(JSON.stringify(body));
@@ -140,6 +144,7 @@ describe("Render HTTP deployment wiring", () => {
       id: 2,
       result: { tools: [{ name: "identity.echo" }] },
     });
+    expect(tools.body.result.tools).toHaveLength(1);
     expect(mocks.verifyJWT).toHaveBeenCalledWith("test-token");
     expect(mocks.getAgentId).toHaveBeenCalledWith("render-test-user", expect.anything());
     expect(connectSpy).toHaveBeenCalledTimes(2);
@@ -149,6 +154,13 @@ describe("Render HTTP deployment wiring", () => {
   it("returns 401 for an unauthenticated, otherwise valid MCP request", async () => {
     const result = await request("/mcp", "POST", { jsonrpc: "2.0", id: 1, method: "initialize", params: {} }, null);
     expect(result).toMatchObject({ status: 401, body: { error: "Unauthorized" } });
+  });
+
+  it("returns 405 and allows POST for GET /mcp without opening an SSE stream", async () => {
+    const result = await request("/mcp", "GET");
+    expect(result.status).toBe(405);
+    expect(result.headers.allow).toBe("POST");
+    expect(mocks.verifyJWT).not.toHaveBeenCalled();
   });
 
   it("preserves forbidden behavior for invalid JWTs and missing user-agent mappings", async () => {
@@ -188,6 +200,11 @@ describe("Render HTTP deployment wiring", () => {
     expect(mocks.verifyJWT).not.toHaveBeenCalled();
     expect(mocks.getAgentId).not.toHaveBeenCalled();
     expect(mocks.toolCall).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 for unknown paths regardless of method", async () => {
+    const result = await request("/not-mcp", "GET");
+    expect(result).toMatchObject({ status: 404, body: { error: "Not found" } });
   });
 
   it("keeps stdio as the default transport and honors explicit transport selection", () => {

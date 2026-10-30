@@ -109,22 +109,29 @@ export async function createHTTPMCPServer(
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
+    // The MCP endpoint is mounted at /mcp. Reject other paths before method
+    // handling so only the declared routes can produce MCP responses.
+    if (req.url !== "/mcp") {
+      res.writeHead(404);
+      res.end(JSON.stringify({ error: "Not found" }));
+      return;
+    }
+
     if (req.method === "OPTIONS") {
       res.writeHead(204);
       res.end();
       return;
     }
 
-    if (req.method !== "POST") {
-      res.writeHead(404);
-      res.end(JSON.stringify({ error: "Not found" }));
+    // This stateless server uses JSON responses and does not maintain an SSE
+    // stream. Make the unsupported GET behavior explicit to Streamable HTTP clients.
+    if (req.method === "GET") {
+      res.writeHead(405, { Allow: "POST" });
+      res.end(JSON.stringify({ error: "Method not allowed" }));
       return;
     }
 
-    // The MCP endpoint is mounted at /mcp. Rejecting every other path before
-    // authentication keeps the server from answering (or auth-probing) routes
-    // it does not own.
-    if (req.url !== "/mcp") {
+    if (req.method !== "POST") {
       res.writeHead(404);
       res.end(JSON.stringify({ error: "Not found" }));
       return;
