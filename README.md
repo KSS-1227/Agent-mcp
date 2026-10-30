@@ -422,12 +422,14 @@ The health server listens on `HEALTH_PORT` (8081) for both transports.
 | `SUPABASE_ANON_KEY` | Optional | Anon key for clients that need it. |
 | `MCP_TRANSPORT` | Optional | `stdio` (default) or `http`. |
 | `MCP_HTTP_PORT` / `HEALTH_PORT` | Optional | HTTP transport port (8080) and health port (8081). |
-| `LLM_PROVIDER` | Optional | `nemotron` (default), `grok`, `nebius`, `nvidia`, or `none` for deterministic-only adjudication. |
+| `CONFLICT_LLM_PROVIDER` | Optional | Conflict Engine only; defaults to `nemotron`. Choose `nemotron`, `grok`, `nebius`, `nvidia`, or `none` to select the conflict adjudicator. This setting is independent of `LLM_PROVIDER`. |
+| `LLM_PROVIDER` | Optional | Generic/legacy provider resolver; defaults to `grok`. The existing Grok 4.3 client continues to use AWS Bedrock Mantle with the existing model and credential settings. |
 | `NEMOTRON_BASE_URL` | Required for Nemotron | Base URL of a separately deployed OpenAI-compatible Hugging Face Space or Inference Endpoint. No endpoint is assumed. |
 | `NEMOTRON_MODEL`, `NEMOTRON_TIMEOUT_MS`, `NEMOTRON_MAX_OUTPUT_TOKENS`, `NEMOTRON_TEMPERATURE`, `NEMOTRON_SYSTEM_PROMPT` | Optional | Nemotron model and request controls. |
 | `HF_TOKEN` | Optional | Hugging Face bearer token for endpoints that require authentication; keep server-side and out of frontend variables. |
-| `BEDROCK_API_KEY` / `NEBIUS_API_KEY` / `NVIDIA_API_KEY` | Optional | Credentials for the other adjudication providers. Missing provider credentials leave adjudication deterministic. |
-| `AWS_REGION`, `BEDROCK_MODEL_EMBEDDINGS` | Optional | AWS region and Titan Text Embeddings V2 model used for 1024-dimensional recovery episode vectors. |
+| `BEDROCK_API_KEY` | Optional | Credential for the existing AWS Bedrock Mantle Grok 4.3 integration. `GROK_REASONING_EFFORT` and `GROK_TIMEOUT_MS` retain their existing behavior. |
+| `NEBIUS_API_KEY` / `NVIDIA_API_KEY` | Optional | Credentials for their respective optional chat providers. A selected provider failure retains deterministic conflict handling. |
+| `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `BEDROCK_MODEL_EMBEDDINGS` | Optional | Existing AWS SDK credentials/region and Titan Text Embeddings V2 model used for recovery episode vectors. Titan continues to emit 1024 dimensions for the existing pgvector columns. |
 | `NEBIUS_BASE_URL`, `*_MODEL`, `*_TIMEOUT_MS`, `*_MAX_OUTPUT_TOKENS` | Optional | Other provider endpoints and limits. |
 | `SEMANTIC_THRESHOLD`, `SEMANTIC_K` | Optional | Vector similarity cutoff (`0.58`) and neighbour count (`10`). |
 | `GITHUB_TOKEN` | Optional | Required by `execute_github_issue` and production verification. Use a fine-grained token scoped only to the configured repository; issue creation requires Issues: write and verifier lookup requires Issues: read. |

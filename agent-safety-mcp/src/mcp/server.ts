@@ -312,8 +312,8 @@ export async function startHTTPMCPServer() {
   const lifecycle = getServerLifecycle(server);
   let httpServer;
   try {
-    const { createHTTPMCPServer } = await import("./http-transport.js");
-    const port = parseInt(process.env.MCP_HTTP_PORT || "8080", 10);
+    const { createHTTPMCPServer, resolveHTTPPort } = await import("./http-transport.js");
+    const port = resolveHTTPPort();
     httpServer = await createHTTPMCPServer(server, lifecycle.database, port);
   } catch (error) {
     await lifecycle.shutdown();

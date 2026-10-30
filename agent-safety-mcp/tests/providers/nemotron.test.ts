@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NemotronChatCompletionsClient } from "../../src/providers/nemotron";
-import { getAdjudicationProvider } from "../../src/providers";
+import { getAdjudicationProvider, getConflictAdjudicationProvider } from "../../src/providers";
+import { GrokResponsesClient } from "../../src/providers/grok";
 
 const successful = () => new Response(JSON.stringify({
   choices: [{ message: { content: '{"verdict":"invalidating","rationale":"The deterministic conflict remains."}' }, finish_reason: "stop" }],
@@ -28,11 +29,39 @@ describe("Nemotron OpenAI-compatible provider", () => {
     expect(result).toMatchObject({ text: '{"verdict":"invalidating","rationale":"The deterministic conflict remains."}', inputTokens: 17, outputTokens: 9 });
   });
 
-  it("selects Nemotron via LLM_PROVIDER", () => {
+  it("selects Nemotron via CONFLICT_LLM_PROVIDER", () => {
     const previous = process.env.LLM_PROVIDER;
-    process.env.LLM_PROVIDER = "nemotron";
-    try { expect(getAdjudicationProvider()?.label).toContain("nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB"); }
-    finally { if (previous === undefined) delete process.env.LLM_PROVIDER; else process.env.LLM_PROVIDER = previous; }
+    const conflictPrevious = process.env.CONFLICT_LLM_PROVIDER;
+    process.env.CONFLICT_LLM_PROVIDER = "nemotron";
+    try { expect(getConflictAdjudicationProvider()?.label).toContain("nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB"); }
+    finally {
+      if (previous === undefined) delete process.env.LLM_PROVIDER; else process.env.LLM_PROVIDER = previous;
+      if (conflictPrevious === undefined) delete process.env.CONFLICT_LLM_PROVIDER; else process.env.CONFLICT_LLM_PROVIDER = conflictPrevious;
+    }
+  });
+
+  it("routes conflict adjudication independently from the generic Grok provider", () => {
+    vi.stubEnv("LLM_PROVIDER", "grok");
+    vi.stubEnv("CONFLICT_LLM_PROVIDER", "nemotron");
+    expect(getAdjudicationProvider()).toBeInstanceOf(GrokResponsesClient);
+    expect(getAdjudicationProvider()?.label).toBe("Grok / xai.grok-4.3");
+    expect(getConflictAdjudicationProvider()).toBeInstanceOf(NemotronChatCompletionsClient);
+
+    vi.stubEnv("CONFLICT_LLM_PROVIDER", "grok");
+    expect(getConflictAdjudicationProvider()).toBeInstanceOf(GrokResponsesClient);
+  });
+
+  it("keeps Grok requests on the existing Bedrock Mantle endpoint and model", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      status: "completed",
+      output: [{ type: "message", content: [{ type: "output_text", text: "{}" }] }],
+    }), { status: 200 }));
+    const client = new GrokResponsesClient({ apiKey: () => "bedrock-test-token", fetchImpl });
+    await client.createResponse("review");
+    const [url, init] = fetchImpl.mock.calls[0];
+    expect(String(url)).toBe("https://bedrock-mantle.us-east-1.api.aws/openai/v1/responses");
+    expect(init?.headers).toMatchObject({ Authorization: "Bearer bedrock-test-token" });
+    expect(JSON.parse(String(init?.body)).model).toBe("xai.grok-4.3");
   });
 
   it("supports local endpoints without authentication", async () => {

@@ -256,7 +256,7 @@ export default function ConflictMonitorPage() {
         <p className="text-xs text-[#777A73] leading-relaxed max-w-4xl">
           When an agent acts, `prepare_action` evaluates the plan against resource mutations. The
           provenance graph adjudicates first; only ambiguous edge cases are escalated to the
-          LLM provider configured in the backend (`LLM_PROVIDER`). Actions never proceed past
+          Conflict adjudication provider configured in the backend (`CONFLICT_LLM_PROVIDER`). Actions never proceed past
           invalidated steps.
         </p>
       </div>

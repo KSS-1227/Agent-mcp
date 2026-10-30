@@ -11,6 +11,7 @@ export interface EnvironmentConfig {
   supabaseServiceRoleKey: string;
   databaseUrl?: string;
   llmProvider?: string;
+  conflictLlmProvider?: string;
   logLevel?: string;
 }
 
@@ -52,7 +53,8 @@ export function validateEnvironment(): EnvironmentConfig {
   const supabaseServiceRoleKeyValue = supabaseServiceRoleKey as string;
 
   // Optional: LLM configuration
-  const llmProvider = process.env.LLM_PROVIDER || "nemotron";
+  const llmProvider = process.env.LLM_PROVIDER || "grok";
+  const conflictLlmProvider = process.env.CONFLICT_LLM_PROVIDER || "nemotron";
 
   // Optional: Logging
   const logLevel = process.env.LOG_LEVEL || "info";
@@ -62,6 +64,7 @@ export function validateEnvironment(): EnvironmentConfig {
     supabaseServiceRoleKey: supabaseServiceRoleKeyValue,
     databaseUrl,
     llmProvider,
+    conflictLlmProvider,
     logLevel,
   };
 }

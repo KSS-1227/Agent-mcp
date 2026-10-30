@@ -22,7 +22,7 @@ import { IntentStatus, DiffResult, ResourceChange, AdjudicateResponse, ResolveRe
 import { ResourceService } from "../core/resource.service";
 import { CommitLog, Resource } from "../core/types";
 import { AdjudicationProvider } from "../providers/types";
-import { getAdjudicationProvider } from "../providers";
+import { getConflictAdjudicationProvider } from "../providers";
 
 /**
  * WATCH STEP: Find threatened intents when a commit lands
@@ -228,7 +228,7 @@ export async function adjudicateWithGrok(
   intentId: string,
   resources: ResourceService,
   intentService = getIntentService(),
-  provider: AdjudicationProvider | undefined = getAdjudicationProvider()
+  provider: AdjudicationProvider | undefined = getConflictAdjudicationProvider()
 ): Promise<AdjudicateResponse> {
   const deterministic = adjudicate(commitId, intentId, resources, intentService);
   if (deterministic.verdict !== "invalidating" || !provider) return deterministic;
@@ -380,7 +380,7 @@ export async function handleCommit(
   commit: CommitLog,
   resources: ResourceService,
   intentService = getIntentService(),
-  provider: AdjudicationProvider | undefined = getAdjudicationProvider()
+  provider: AdjudicationProvider | undefined = getConflictAdjudicationProvider()
 ): Promise<{ resolutions: ResolveResponse[] }> {
   // WATCH: Find threatened intents
   const threatened = findThreatened(commit, intentService);

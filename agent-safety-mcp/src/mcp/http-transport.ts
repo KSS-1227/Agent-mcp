@@ -4,6 +4,16 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { verifySupabaseJWT, extractBearerToken } from "../auth/jwt-verifier";
 import { getAgentIdForUser } from "../auth/user-agent-mapping";
 import { DatabaseClient } from "../database/client";
+import { handleHealthRequest } from "../health/server";
+
+export function resolveHTTPPort(env: NodeJS.ProcessEnv = process.env): number {
+  const configured = env.PORT?.trim() || env.MCP_HTTP_PORT?.trim() || "8080";
+  const port = Number(configured);
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw new Error("PORT or MCP_HTTP_PORT must be an integer between 1 and 65535");
+  }
+  return port;
+}
 
 /**
  * HTTP MCP Transport with JWT Authentication
@@ -59,6 +69,13 @@ export async function createHTTPMCPServer(
   });
 
   const httpServer = http.createServer(async (req, res) => {
+    // Render exposes one service port. Serve health checks on this same listener
+    // while preserving the existing unauthenticated health endpoint semantics.
+    if (req.method === "GET" && req.url?.startsWith("/health")) {
+      await handleHealthRequest(req, res);
+      return;
+    }
+
     // Handle CORS
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -141,7 +158,7 @@ export async function createHTTPMCPServer(
   });
 
   return new Promise((resolve, reject) => {
-    httpServer.listen(port, "127.0.0.1", () => {
+    httpServer.listen(port, "0.0.0.0", () => {
       console.error(`[MCP HTTP] Authenticated HTTP server listening on port ${port}`);
       resolve(httpServer);
     });

@@ -69,6 +69,13 @@ tests/
 **/__snapshots__/
 .jest-cache/
 
+# Keep the deployment transport regression test versioned with its source.
+!tests/
+tests/*
+!tests/mcp/
+tests/mcp/*
+!tests/mcp/render-http.test.ts
+
 # Captured output (verification logs and reports, not source)
 *.txt
 

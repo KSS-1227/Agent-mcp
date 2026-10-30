@@ -9,6 +9,10 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+export function resolveMCPTransport(value = process.env.MCP_TRANSPORT): string {
+  return value || "stdio";
+}
+
 async function main() {
   console.error("[Agent Safety MCP] Starting server...");
 
@@ -18,25 +22,28 @@ async function main() {
   const { validateEnvironment } = await import("./config/index");
   const { startMCPServer, startHTTPMCPServer } = await import("./mcp/server");
   const { startHealthServer } = await import("./health/server");
-  const { getAdjudicationProviderLabel, getAdjudicationProviderStartupWarning } = await import("./providers");
+  const { getConflictAdjudicationProviderLabel, getConflictAdjudicationProviderStartupWarning } = await import("./providers");
 
   let stopMcpServer: (() => Promise<void>) | undefined;
   let stopHealthServer: (() => Promise<void>) | undefined;
   try {
     validateEnvironment();
     console.error(`[Config] Environment validated`);
-    const providerWarning = getAdjudicationProviderStartupWarning();
+    const providerWarning = getConflictAdjudicationProviderStartupWarning();
     if (providerWarning) console.error(`[Warning] ${providerWarning}`);
-    console.error(`[Config] Conflict adjudicator: ${getAdjudicationProviderLabel()}`);
+    console.error(`[Config] Conflict adjudicator: ${getConflictAdjudicationProviderLabel()}`);
     
-    const transport = process.env.MCP_TRANSPORT || "stdio";
+    const transport = resolveMCPTransport();
     console.error(`[Config] MCP Transport: ${transport}`);
 
-    // Start health server (always)
-    const healthServerPromise = startHealthServer().then((stop) => {
-      stopHealthServer = stop;
-      return stop;
-    });
+    // HTTP mode serves health routes on the public MCP listener. Stdio mode
+    // keeps the standalone local health listener used by existing deployments.
+    const healthServerPromise = transport === "http"
+      ? Promise.resolve(undefined)
+      : startHealthServer().then((stop) => {
+        stopHealthServer = stop;
+        return stop;
+      });
 
     // Start MCP server with chosen transport
     const mcpServerPromise = (transport === "http"
