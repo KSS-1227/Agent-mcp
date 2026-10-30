@@ -75,9 +75,16 @@ tests/*
 !tests/mcp/
 tests/mcp/*
 !tests/mcp/render-http.test.ts
+!tests/helpers/
+tests/helpers/*
+!tests/helpers/live-db-guard.ts
+!tests/helpers/live-db-guard.test.ts
 !tests/recovery-engine/
 tests/recovery-engine/*
 !tests/recovery-engine/cloudflare-embedder.test.ts
+!tests/recovery-engine/phase-10f.test.ts
+!tests/mcp/prepare_action_conflict_gate.test.ts
+!tests/mcp/action-lifecycle.test.ts
 !tests/conflict-engine/
 tests/conflict-engine/*
 !tests/conflict-engine/embedding-provenance.test.ts

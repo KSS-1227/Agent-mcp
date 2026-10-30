@@ -22,6 +22,7 @@ import { v4 as uuidv4, validate as validateUUID } from "uuid";
 import { assertConfiguredGithubRepository, githubRepository, githubToken, GITHUB_CREATE_ISSUE, GitHubIssueExecutor, validateCreateIssueArgs } from "../../recovery-engine/github-issue";
 import { VerdictDisposition } from "../../recovery-engine/types";
 import { getRecoveryEmbedder } from "../../recovery-engine/embedder";
+import { assertActionTypeAllowed } from "../action-type-policy";
 
 export interface ToolWithHandler {
   name: string;
@@ -178,6 +179,7 @@ export function getActionProtocolTools(database?: DatabaseClient): ToolWithHandl
       if (!args.action_type || typeof args.action_type !== "string") {
         throw new Error("action_type is required and must be a string");
       }
+      assertActionTypeAllowed(args.action_type, getVerifierRegistry());
       if (args.action_type === GITHUB_CREATE_ISSUE) {
         validateCreateIssueArgs(args.arguments);
         if (!githubRepository()) throw new Error("GITHUB_REPOSITORY must be configured as owner/repository");
