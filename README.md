@@ -98,10 +98,10 @@ flowchart LR
     P --> DB
     R --> DB
     S --> DB
-    C -.->|"only when the graph cannot rule"| L["Adjudicator<br/>Grok · Nebius · NVIDIA · none"]
+    C -.->|"only when the graph cannot rule"| L["Adjudicator<br/>Nemotron · Grok · Nebius · NVIDIA · none"]
     P -->|"github.create_issue"| X["External system<br/>GitHub REST API"]
     R -->|"outcome query by correlation marker"| X
-    R -->|"episode embeddings"| O["Ollama embedder<br/>optional"]
+    R -->|"episode embeddings"| O["Amazon Bedrock Titan Text Embeddings V2<br/>1024 dimensions"]
     H --> DB
 ```
 
@@ -132,7 +132,7 @@ Layers, top to bottom:
 │   │   ├── core/                # Shared agent / resource / task model
 │   │   ├── mcp/                 # Server, transports, tool registrations, authorization
 │   │   ├── auth/                # JWT verification, user→agent mapping, permissions
-│   │   ├── providers/           # Adjudication providers (Grok, Nebius, NVIDIA)
+│   │   ├── providers/           # Adjudication providers (Grok, Nebius, NVIDIA, Nemotron)
 │   │   ├── config/              # Environment validation, entrypoint-only .env loading
 │   │   ├── database/            # PostgreSQL client
 │   │   ├── health/              # Health server and checks
@@ -422,13 +422,16 @@ The health server listens on `HEALTH_PORT` (8081) for both transports.
 | `SUPABASE_ANON_KEY` | Optional | Anon key for clients that need it. |
 | `MCP_TRANSPORT` | Optional | `stdio` (default) or `http`. |
 | `MCP_HTTP_PORT` / `HEALTH_PORT` | Optional | HTTP transport port (8080) and health port (8081). |
-| `LLM_PROVIDER` | Optional | `grok` (default), `nebius`, `nvidia`, or `none` for deterministic-only adjudication. |
-| `BEDROCK_API_KEY` / `NEBIUS_API_KEY` / `NVIDIA_API_KEY` | Optional | Provider credentials; missing keys leave adjudication deterministic. |
-| `NEBIUS_BASE_URL`, `*_MODEL`, `*_TIMEOUT_MS`, `*_MAX_OUTPUT_TOKENS` | Optional | Provider endpoint and limits. |
+| `LLM_PROVIDER` | Optional | `nemotron` (default), `grok`, `nebius`, `nvidia`, or `none` for deterministic-only adjudication. |
+| `NEMOTRON_BASE_URL` | Required for Nemotron | Base URL of a separately deployed OpenAI-compatible Hugging Face Space or Inference Endpoint. No endpoint is assumed. |
+| `NEMOTRON_MODEL`, `NEMOTRON_TIMEOUT_MS`, `NEMOTRON_MAX_OUTPUT_TOKENS`, `NEMOTRON_TEMPERATURE`, `NEMOTRON_SYSTEM_PROMPT` | Optional | Nemotron model and request controls. |
+| `HF_TOKEN` | Optional | Hugging Face bearer token for endpoints that require authentication; keep server-side and out of frontend variables. |
+| `BEDROCK_API_KEY` / `NEBIUS_API_KEY` / `NVIDIA_API_KEY` | Optional | Credentials for the other adjudication providers. Missing provider credentials leave adjudication deterministic. |
+| `AWS_REGION`, `BEDROCK_MODEL_EMBEDDINGS` | Optional | AWS region and Titan Text Embeddings V2 model used for 1024-dimensional recovery episode vectors. |
+| `NEBIUS_BASE_URL`, `*_MODEL`, `*_TIMEOUT_MS`, `*_MAX_OUTPUT_TOKENS` | Optional | Other provider endpoints and limits. |
 | `SEMANTIC_THRESHOLD`, `SEMANTIC_K` | Optional | Vector similarity cutoff (`0.58`) and neighbour count (`10`). |
 | `GITHUB_TOKEN` | Optional | Required by `execute_github_issue` and production verification. Use a fine-grained token scoped only to the configured repository; issue creation requires Issues: write and verifier lookup requires Issues: read. |
 | `GITHUB_REPOSITORY` | Optional | Exact `owner/repository` allowed for `github.create_issue`; required alongside `GITHUB_TOKEN` to register its production verifier. |
-| `OLLAMA_BASE_URL` | Optional | Embedder for episode narratives during crash recovery (default `http://localhost:11434`). |
 | `SYSTEM_AGENT_IDS` | Optional | Comma-separated agent IDs allowed to call system-only tools. |
 | `RUN_DATABASE_MIGRATIONS` | Gate | Must be `1` for `npm run db:migrate` to apply migrations. |
 | `RUN_DEMO` | Gate | Must be `1` for `npm run demo` and `npm run db:seed` to write demo rows. |
@@ -458,7 +461,7 @@ Layout:
 | `tests/recovery-engine/` | Idempotency keys, protocol phases, effect states, verifier dispatch, resource-version snapshots |
 | `tests/conflict-engine/` | Detection, provenance, persistence across restart, provider selection |
 | `tests/auth/` | JWT verification, user→agent mapping, cross-agent read isolation |
-| `tests/providers/` | Grok, Nebius, NVIDIA adapters |
+| `tests/providers/` | Grok, Nebius, NVIDIA, Nemotron adapters |
 | `tests/config/`, `tests/health.test.ts` | Environment validation, entrypoint-only `.env` loading, health checks |
 | `tests/integration/` | Live-database and subprocess-crash suites, **opt-in** |
 
@@ -480,7 +483,7 @@ kept, what changed, and what was intentionally left behind.
 | **Database** | CockroachDB: `SERIALIZABLE`, `AS OF SYSTEM TIME`, C-SPANN vector index, TTL, multi-region survival | PostgreSQL + pgvector on Supabase; replay by resource-version comparison instead of time travel |
 | **Action surface** | `ccloud` CLI: scoped diagnostic SQL users | `github.create_issue` through the GitHub REST API |
 | **Verification** | `ccloud audit list`, matched on a username derived from the idempotency key | Paginated GitHub issue listing, matched on a correlation marker in the issue body; an incomplete listing yields `UNKNOWN` |
-| **Embeddings** | Bedrock Titan Text Embeddings V2, 1024 dimensions | `episodes.embedding` / `intents.embedding` at 1024 dimensions; Ollama embedder for recovery narratives; adjudication providers are pluggable |
+| **Embeddings** | Bedrock Titan Text Embeddings V2, 1024 dimensions | `episodes.embedding` / `intents.embedding` at 1024 dimensions; adjudication providers are pluggable |
 | **Concurrency** | Out of scope | Conflict engine added (declare/watch/diff/adjudicate) with a deterministic gate inside `prepare_action` |
 | **Identity and authorization** | Scope isolation in SQL, Secrets Manager for credentials | JWT verification, user→agent mapping, per-tool fail-closed authorization, system-only tool set |
 | **Schema** | 6 tables | 13 application tables across 18 migrations, including effect-state columns, verifier evidence, resource-version snapshots, and an external-effect test ledger |

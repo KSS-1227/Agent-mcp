@@ -52,7 +52,7 @@ export function validateEnvironment(): EnvironmentConfig {
   const supabaseServiceRoleKeyValue = supabaseServiceRoleKey as string;
 
   // Optional: LLM configuration
-  const llmProvider = process.env.LLM_PROVIDER || "grok";
+  const llmProvider = process.env.LLM_PROVIDER || "nemotron";
 
   // Optional: Logging
   const logLevel = process.env.LOG_LEVEL || "info";

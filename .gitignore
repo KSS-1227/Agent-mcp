@@ -8,6 +8,17 @@
 *.p12
 credentials.json
 
+# Downloaded Hugging Face caches and local model weights
+**/.cache/huggingface/
+*.gguf
+*.safetensors
+*.onnx
+*.pt
+*.pth
+*.ckpt
+*.model
+*.bin
+
 # ===========================================================================
 # Dependencies and build output
 # ===========================================================================

@@ -12,7 +12,7 @@ import { ActionCoordinator } from "../recovery-engine/coordinator";
 import { ActionReconciler, type ActionVerifier, type Embedder } from "../recovery-engine/reconciliation";
 import { getVerifierRegistry, ProductionActionVerifierDispatcher } from "../recovery-engine/verifier_registry";
 import { githubRepository, githubToken, GITHUB_CREATE_ISSUE, GitHubIssueVerifier } from "../recovery-engine/github-issue";
-import { OllamaEmbedder } from "../recovery-engine/ollama-embedder";
+import { TitanEmbedder } from "../recovery-engine/titan-embedder";
 import { getAgentService } from "../core/agent.service";
 import { getResourceService } from "../core/resource.service";
 import { getTaskService } from "../core/task.service";
@@ -186,14 +186,14 @@ export async function createMCPServer() {
     console.warn("[Recovery] Automatic recovery disabled: no production action verifiers are registered");
   } else {
     try {
-      const embedder = new OllamaEmbedder();
+      const embedder = new TitanEmbedder();
       await embedder.checkAvailability();
       const verifier = new ProductionActionVerifierDispatcher(verifierRegistry);
       const reconcilerAgentId = await resolveReconcilerAgentId(agentService, (db as any).pool);
       recoveryLease = await acquireRecoveryLoop(db, reconcilerAgentId, verifier, embedder);
     } catch {
       setRecoveryRuntimeHealth({ state: "error", enabled: false, failure: true });
-      console.warn("[Recovery] Automatic recovery disabled: Ollama or recovery initialization is unavailable");
+      console.warn("[Recovery] Automatic recovery disabled: Titan embeddings or recovery initialization is unavailable");
     }
   }
 

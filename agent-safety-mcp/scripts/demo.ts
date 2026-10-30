@@ -14,7 +14,7 @@
  *        PowerShell:  $env:DATABASE_URL = "postgresql://user:pass@host:5432/db"
  *        bash:        export DATABASE_URL="postgresql://user:pass@host:5432/db"
  *   3. Runtime configuration includes SUPABASE_URL and
- *      SUPABASE_SERVICE_ROLE_KEY. Ollama is optional; it is used for automatic
+ *      SUPABASE_SERVICE_ROLE_KEY. Bedrock Titan embeddings are required for automatic
  *      action recovery only when a production verifier (currently GitHub via
  *      GITHUB_TOKEN) is registered. The demo workflow does not require it.
  *

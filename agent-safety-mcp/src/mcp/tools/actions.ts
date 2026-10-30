@@ -21,7 +21,7 @@ import { PlanStep } from "../../core/types";
 import { v4 as uuidv4, validate as validateUUID } from "uuid";
 import { assertConfiguredGithubRepository, githubRepository, githubToken, GITHUB_CREATE_ISSUE, GitHubIssueExecutor, validateCreateIssueArgs } from "../../recovery-engine/github-issue";
 import { VerdictDisposition } from "../../recovery-engine/types";
-import { OllamaEmbedder } from "../../recovery-engine/ollama-embedder";
+import { TitanEmbedder } from "../../recovery-engine/titan-embedder";
 
 export interface ToolWithHandler {
   name: string;
@@ -721,7 +721,7 @@ export function getActionProtocolTools(database?: DatabaseClient): ToolWithHandl
         (db as any).pool,
         coordinator,
         verifier,
-        new OllamaEmbedder(),
+        new TitanEmbedder(),
         reconcilerAgentId,
         120
       );
