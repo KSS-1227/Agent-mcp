@@ -120,6 +120,9 @@ export class GitHubIssueExecutor {
     attemptedIssueActions.add(action.idemKey);
     try {
       await createGitHubIssue(this.token, action, this.fetcher);
+      // Verification stays inside the POST error boundary. The create may have
+      // been applied, so a verifier that throws instead of returning a verdict
+      // leaves the outcome unproven: that is UNKNOWN, not an escaping exception.
       return await new GitHubIssueVerifier(this.token, this.fetcher).verify(action);
     } catch (error: any) {
       if (error?.confirmedNotApplied) return { disposition: VerdictDisposition.NotApplied, externalRef: "", outcome: { status: "failed" }, reason: "GitHub rejected the issue payload" };

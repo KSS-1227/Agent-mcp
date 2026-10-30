@@ -1,4 +1,4 @@
-﻿-- Phase 10F Migration: Durable External-Effect Protocol
+-- Phase 10F Migration: Durable External-Effect Protocol
 -- Adds effect-state tracking separate from action status
 -- Enables precise crash-window recovery and UNKNOWN outcome handling
 

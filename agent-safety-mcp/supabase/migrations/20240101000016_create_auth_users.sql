@@ -1,4 +1,4 @@
-﻿-- Phase 12E Migration: User-Agent Mapping for Authenticated HTTP MCP
+-- Phase 12E Migration: User-Agent Mapping for Authenticated HTTP MCP
 -- Creates auth_users table to map Supabase user_id to authorized agent_id
 -- Enables secure HTTP authentication and authorization
 

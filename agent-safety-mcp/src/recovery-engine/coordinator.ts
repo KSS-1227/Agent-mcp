@@ -88,6 +88,24 @@ SELECT narrative, outcome, status
    AND embedding_provider = $5 AND embedding_model = $6
  FOR UPDATE`;
 
+const WRITE_RECOVERY_EVIDENCE = `
+INSERT INTO action_evidence (action_id, source, evidence_type, external_reference, payload)
+SELECT id, $2, $3, $4, $5::jsonb
+  FROM actions
+ WHERE idempotency_key = $1
+RETURNING id`;
+
+const SELECT_RECOVERY_EVIDENCE = `
+SELECT ae.id
+  FROM action_evidence ae
+  JOIN actions a ON a.id = ae.action_id
+ WHERE a.idempotency_key = $1
+   AND ae.source = $2
+   AND ae.evidence_type = $3
+   AND ae.external_reference = $4
+   AND ae.payload = $5::jsonb
+ FOR UPDATE OF ae`;
+
 const MUTATE_CLUSTER = `
 UPDATE managed_clusters
    SET desired_nodes = COALESCE($2, desired_nodes),
@@ -853,6 +871,19 @@ export class ActionCoordinator {
             );
           }
 
+          if (commit.evidenceWrite) {
+            const evidence = await client.query(SELECT_RECOVERY_EVIDENCE, [
+              commit.idemKey,
+              commit.evidenceWrite.source,
+              commit.evidenceWrite.evidenceType,
+              commit.evidenceWrite.externalReference,
+              JSON.stringify(commit.evidenceWrite.payload),
+            ]);
+            if (evidence.rows.length !== 1) {
+              throw new Error("Committed recovery evidence does not match the persisted verifier result");
+            }
+          }
+
           // The original transaction committed all of these writes atomically;
           // verify rather than rewrite memory on an ambiguous-acknowledgment retry.
           await this.convergeLifecycle(
@@ -871,6 +902,19 @@ export class ActionCoordinator {
             commit.worldEffect.desiredNodes,
             commit.worldEffect.lastAction,
           ]);
+        }
+
+        if (commit.evidenceWrite) {
+          const evidence = await client.query(WRITE_RECOVERY_EVIDENCE, [
+            commit.idemKey,
+            commit.evidenceWrite.source,
+            commit.evidenceWrite.evidenceType,
+            commit.evidenceWrite.externalReference,
+            JSON.stringify(commit.evidenceWrite.payload),
+          ]);
+          if (evidence.rowCount !== 1) {
+            throw new Error("Could not persist verifier evidence for recovered action");
+          }
         }
 
         // Write memory with embedding

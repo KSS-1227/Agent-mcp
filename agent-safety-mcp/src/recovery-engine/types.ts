@@ -111,8 +111,24 @@ export enum VerdictDisposition {
   Unknown = 2,
 }
 
-export function verdictDispositionToString(v: VerdictDisposition): string {
-  switch (v) {
+/**
+ * Stable label for a verdict disposition.
+ *
+ * Persisted evidence records this label rather than the numeric enum so a stored
+ * payload stays readable and keeps its meaning even if enum ordinals ever change.
+ * Rows written before that change hold the ordinal, so numbers and already-mapped
+ * labels normalize to the same label when read back.
+ */
+export function verdictDispositionToString(
+  value: VerdictDisposition | string | number | null | undefined
+): string {
+  if (typeof value === "string") {
+    const label = value.trim().toUpperCase();
+    return label === "APPLIED" || label === "NOT_APPLIED" || label === "UNKNOWN"
+      ? label
+      : "UNKNOWN";
+  }
+  switch (value) {
     case VerdictDisposition.Applied:
       return "APPLIED";
     case VerdictDisposition.NotApplied:
@@ -197,6 +213,15 @@ export interface AtomicCommit {
   receipt?: Receipt;
   worldEffect?: WorldEffect;
   memoryWrite: MemoryWrite;
+  /** Verifier evidence to persist in the same transaction as recovered state. */
+  evidenceWrite?: ActionEvidenceWrite;
+}
+
+export interface ActionEvidenceWrite {
+  source: string;
+  evidenceType: string;
+  externalReference: string;
+  payload: Record<string, unknown>;
 }
 
 /**

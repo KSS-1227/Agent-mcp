@@ -1,4 +1,4 @@
-﻿-- Phase 10C: Test External Ledger for Crash-Recovery Testing
+-- Phase 10C: Test External Ledger for Crash-Recovery Testing
 -- Persists simulated external effects across process restarts
 -- Used to verify exactly-once semantics and recovery paths
 

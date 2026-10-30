@@ -4,10 +4,11 @@
  */
 
 import { Pool } from "pg";
-import { Action, ActionState, EffectState, ReconciliationStats, VerdictDisposition, Verdict } from "./types";
+import { Action, ActionState, EffectState, ReconciliationStats, VerdictDisposition, Verdict, verdictDispositionToString } from "./types";
 import { ActionCoordinator } from "./coordinator";
 import { recordRecoveryFailure, recordRecoveryPass, setRecoveryRuntimeHealth } from "../health/recovery-runtime";
 import type { EmbeddingIdentity } from "./embedding-identity";
+import { GITHUB_CREATE_ISSUE, githubMarker } from "./github-issue";
 
 export const CLAIM_EXPIRED = `
 WITH claimable AS (
@@ -410,6 +411,23 @@ export class ActionReconciler {
         externalRef,
         outcome: { status: "success" as const, ...verdict.outcome },
       },
+      ...(action.actionType === GITHUB_CREATE_ISSUE
+        ? {
+            evidenceWrite: {
+              source: action.actionType,
+              evidenceType: "verified_external_effect",
+              externalReference: externalRef,
+              payload: {
+                // Persist the stable label, never the enum ordinal: evidence is an
+                // audited record that must stay readable on its own.
+                disposition: verdictDispositionToString(verdict.disposition),
+                reason: verdict.reason,
+                outcome: verdict.outcome,
+                correlationMarker: githubMarker(action),
+              },
+            },
+          }
+        : {}),
       worldEffect,
       memoryWrite: {
         episodeId: action.episodeId,

@@ -165,10 +165,10 @@ export interface LiveCleanupReport {
   ok: boolean;
   connectionReusable: boolean;
   refusal?: LiveCleanupRefusal;
-  deleted: Partial<Record<LiveFixtureTable, number>>;
+  deleted: Partial<Record<LiveFixtureTable | "action_evidence" | "test_external_effects", number>>;
   unresolved: LiveCleanupUnresolved[];
   failures: string[];
-  residue: Partial<Record<LiveFixtureTable, number>>;
+  residue: Partial<Record<LiveFixtureTable | "action_evidence" | "test_external_effects", number>>;
 }
 
 /** Formats only the table, tracked fixture identifier, and fixed reason code. */
@@ -235,6 +235,14 @@ const OWNERSHIP_SQL = {
                   WHERE id = ANY($1::uuid[])
                   FOR UPDATE`,
   episodes: `SELECT episode_id AS id, narrative
+                    , EXISTS (
+                        SELECT 1 FROM actions a
+                         WHERE a.episode_id = episodes.episode_id
+                           AND a.agent_id = ANY($2::uuid[])
+                           AND a.idempotency_key = ANY($3::text[])
+                           AND (position($4 IN coalesce(a.arguments->>'title', '')) > 0
+                             OR position($4 IN coalesce(a.arguments->>'body', '')) > 0)
+                      ) AS namespaced_action_owned
                FROM episodes
                WHERE episode_id = ANY($1::text[])
                FOR UPDATE`,
@@ -281,6 +289,11 @@ const DELETE_SQL = {
   agents: "DELETE FROM agents WHERE id = ANY($1::uuid[])",
 } as const;
 
+const DELETE_DEPENDENT_SQL = {
+  action_evidence: "DELETE FROM action_evidence WHERE id = ANY($1::uuid[])",
+  test_external_effects: "DELETE FROM test_external_effects WHERE id = ANY($1::uuid[])",
+} as const;
+
 const RESIDUE_SQL = {
   actions:
     "SELECT count(*)::int AS remaining FROM actions WHERE idempotency_key = ANY($1::text[])",
@@ -292,6 +305,11 @@ const RESIDUE_SQL = {
     "SELECT count(*)::int AS remaining FROM episodes WHERE episode_id = ANY($1::text[])",
   agents:
     "SELECT count(*)::int AS remaining FROM agents WHERE id = ANY($1::uuid[])",
+} as const;
+
+const DEPENDENT_RESIDUE_SQL = {
+  action_evidence: "SELECT count(*)::int AS remaining FROM action_evidence WHERE id = ANY($1::uuid[])",
+  test_external_effects: "SELECT count(*)::int AS remaining FROM test_external_effects WHERE id = ANY($1::uuid[])",
 } as const;
 
 function unique(values: readonly string[]): string[] {
@@ -358,10 +376,15 @@ export async function runLiveFixtureCleanup(
   report.attempted = true;
   let transactionOpen = false;
   const requested = fixtureIds(plan);
-  const allRequested = (): LiveCleanupUnresolved[] =>
-    LIVE_FIXTURE_DELETE_ORDER.flatMap((table) =>
+  const requestedDependents = fixtureDependentIds(plan);
+  const allRequested = (): LiveCleanupUnresolved[] => [
+    ...LIVE_FIXTURE_DELETE_ORDER.flatMap((table) =>
       requested[table].map((id) => ({ table, id, reason: "cleanup-aborted" as const }))
-    );
+    ),
+    ...(["action_evidence", "test_external_effects"] as const).flatMap((table) =>
+      requestedDependents[table].map((id) => ({ table, id, reason: "cleanup-aborted" as const }))
+    ),
+  ];
   const abort = async (
     message: string,
     unresolved: LiveCleanupUnresolved[] = allRequested()
@@ -431,7 +454,12 @@ export async function runLiveFixtureCleanup(
     }
 
     if (requested.episodes.length) {
-      const result = await client.query(OWNERSHIP_SQL.episodes, [requested.episodes]);
+      const result = await client.query(OWNERSHIP_SQL.episodes, [
+        requested.episodes,
+        proven.agents,
+        requested.actions,
+        plan.namespace,
+      ]);
       for (const row of result.rows) {
         const id = String(row.id);
         const parts = id.split(":");
@@ -444,7 +472,8 @@ export async function runLiveFixtureCleanup(
         const owned = parts.length === 2 &&
           proven.intents.includes(parts[0]) &&
           (stepIntent.get(parts[1]) === parts[0] || intentionallyRemovedStep) &&
-          typeof row.narrative === "string" && row.narrative.includes(plan.namespace);
+          (Boolean(row.namespaced_action_owned) ||
+            (typeof row.narrative === "string" && row.narrative.includes(plan.namespace)));
         if (owned) proven.episodes.push(id);
         else unowned.push({ table: "episodes", id, reason: "ownership-unverified" });
       }
@@ -480,13 +509,10 @@ export async function runLiveFixtureCleanup(
       { table: "intent_reads", ids: [], allowed: new Set(), params: [proven.intents] },
       { table: "conflicts", ids: [], allowed: new Set(), params: [proven.intents] },
       { table: "action_resource_versions", ids: [], allowed: new Set(), params: [proven.actions] },
-      // These tables cascade from actions.id. The test does not create either
-      // dependent today, so their expected sets are empty unless a future
-      // fixture explicitly tracks exact dependent IDs. Any untracked row blocks
-      // action deletion; tracked rows are removed only by the later action
-      // delete's FK cascade, after this verification succeeds.
-      { table: "action_evidence", ids: [], allowed: new Set(fixtureDependentIds(plan).action_evidence), params: [proven.actions], parentActionKey: true },
-      { table: "test_external_effects", ids: [], allowed: new Set(fixtureDependentIds(plan).test_external_effects), params: [proven.actions], parentActionKey: true },
+      // These tables reference actions.id. Any untracked row blocks action
+      // deletion; tracked rows are explicitly deleted below before actions.
+      { table: "action_evidence", ids: [], allowed: new Set(requestedDependents.action_evidence), params: [proven.actions], parentActionKey: true },
+      { table: "test_external_effects", ids: [], allowed: new Set(requestedDependents.test_external_effects), params: [proven.actions], parentActionKey: true },
     ];
     const cascadeUnresolved: LiveCleanupUnresolved[] = [];
     for (const check of cascadeChecks) {
@@ -504,6 +530,30 @@ export async function runLiveFixtureCleanup(
     }
   } catch (error) {
     return abort(`cleanup ownership/cascade preflight failed: ${describeError(error)}`);
+  }
+
+  // Delete tracked action dependents explicitly, while the verified action and
+  // dependent rows remain locked in this pinned transaction. Never rely on an
+  // ON DELETE CASCADE to remove evidence as an implicit cleanup side effect.
+  for (const table of ["action_evidence", "test_external_effects"] as const) {
+    const ids = requestedDependents[table];
+    if (!ids.length) {
+      report.deleted[table] = 0;
+      continue;
+    }
+    try {
+      const result = await client.query(DELETE_DEPENDENT_SQL[table], [ids]);
+      const rowCount = result.rowCount ?? 0;
+      report.deleted[table] = rowCount;
+      if (rowCount !== ids.length) {
+        return abort(
+          `delete from ${table} affected ${rowCount} of ${ids.length} expected rows`,
+          ids.map((id) => ({ table, id, reason: "ambiguous-count" }))
+        );
+      }
+    } catch (error) {
+      return abort(`delete from ${table} failed: ${describeError(error)}`, ids.map((id) => ({ table, id, reason: "delete-failed" })));
+    }
   }
 
   for (const table of LIVE_FIXTURE_DELETE_ORDER) {
@@ -555,6 +605,23 @@ export async function runLiveFixtureCleanup(
     }
   }
 
+  for (const table of ["action_evidence", "test_external_effects"] as const) {
+    const ids = requestedDependents[table];
+    if (!ids.length) continue;
+    try {
+      const result = await client.query(DEPENDENT_RESIDUE_SQL[table], [ids]);
+      const remaining = Number(result.rows[0]?.remaining ?? 0);
+      report.residue[table] = remaining;
+      if (remaining > 0) {
+        report.failures.push(`${remaining} ${table} fixture row(s) remain after cleanup`);
+        report.unresolved.push(...ids.map((id) => ({ table, id, reason: "still-present" as const })));
+      }
+    } catch (error) {
+      report.failures.push(`residue check for ${table} failed: ${describeError(error)}`);
+      report.unresolved.push(...ids.map((id) => ({ table, id, reason: "still-present" as const })));
+    }
+  }
+
   report.ok = report.failures.length === 0;
   if (report.ok) {
     log(`[cleanup] verified: no ${plan.namespace} fixture rows remain`);
@@ -589,9 +656,10 @@ export async function reportLiveFixtureResidue(
   pool: LiveCleanupQueryable,
   plan: LiveFixturePlan,
   log: (message: string) => void = () => {}
-): Promise<{ counts: Partial<Record<LiveFixtureTable, number>>; total: number }> {
+): Promise<{ counts: Partial<Record<LiveFixtureTable | "action_evidence" | "test_external_effects", number>>; total: number }> {
   const requested = fixtureIds(plan);
-  const counts: Partial<Record<LiveFixtureTable, number>> = {};
+  const requestedDependents = fixtureDependentIds(plan);
+  const counts: Partial<Record<LiveFixtureTable | "action_evidence" | "test_external_effects", number>> = {};
   let total = 0;
 
   for (const table of LIVE_FIXTURE_DELETE_ORDER) {
@@ -603,9 +671,20 @@ export async function reportLiveFixtureResidue(
     total += remaining;
   }
 
+  for (const table of ["action_evidence", "test_external_effects"] as const) {
+    const ids = requestedDependents[table];
+    if (!ids.length) continue;
+    const result = await pool.query(DEPENDENT_RESIDUE_SQL[table], [ids]);
+    const remaining = Number(result.rows[0]?.remaining ?? 0);
+    counts[table] = remaining;
+    total += remaining;
+  }
+
   const summary = LIVE_FIXTURE_DELETE_ORDER.map(
     (table) => `${table}=${counts[table] ?? 0}`
-  ).join(" ");
+  ).concat((["action_evidence", "test_external_effects"] as const).map(
+    (table) => `${table}=${counts[table] ?? 0}`
+  )).join(" ");
   log(
     `[cleanup] residue retained for ${plan.namespace}: ${summary} (total=${total}); no deletion was performed`
   );

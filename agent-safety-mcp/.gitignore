@@ -8,7 +8,7 @@ yarn.lock
 .env.development.local
 .env.test.local
 .env.production.local
-
+.env.crash-test
 # Build outputs
 dist/
 build/
@@ -75,16 +75,23 @@ tests/*
 !tests/mcp/
 tests/mcp/*
 !tests/mcp/render-http.test.ts
+!tests/mcp/server-dispatcher.test.ts
 !tests/helpers/
 tests/helpers/*
 !tests/helpers/live-db-guard.ts
 !tests/helpers/live-db-guard.test.ts
+!tests/helpers/live-cleanup-gate.test.ts
 !tests/recovery-engine/
 tests/recovery-engine/*
 !tests/recovery-engine/cloudflare-embedder.test.ts
 !tests/recovery-engine/phase-10f.test.ts
+!tests/recovery-engine/github-crash-recovery.integration.test.ts
+!tests/recovery-engine/github-crash-seam.test.ts
+!tests/recovery-engine/github-crash-recovery-worker.ts
+!tests/recovery-engine/github-recovery-evidence.test.ts
 !tests/mcp/prepare_action_conflict_gate.test.ts
 !tests/mcp/action-lifecycle.test.ts
+!tests/mcp/http-transport.test.ts
 !tests/conflict-engine/
 tests/conflict-engine/*
 !tests/conflict-engine/embedding-provenance.test.ts

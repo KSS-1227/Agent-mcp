@@ -20,6 +20,33 @@ interface MigrationFile {
   content: string;
 }
 
+function diagnosticErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message
+    .replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'`]+/gi, "[redacted connection string or URL]")
+    .replace(/\b(password|passwd|token|api[_-]?key|secret)\s*[:=]\s*(?:'[^']*'|"[^"]*"|[^\s&,;]+)/gi, "$1=[redacted]")
+    .replace(/\b(bearer)\s+[^\s,;]+/gi, "$1 [redacted]");
+}
+
+function postgresErrorDiagnostics(error: unknown): Record<string, string> {
+  if (typeof error !== "object" || error === null) return {};
+  const pgError = error as Record<string, unknown>;
+  if (typeof pgError.code !== "string" || !/^[0-9A-Z]{5}$/.test(pgError.code)) return {};
+
+  const diagnostics: Record<string, string> = { code: pgError.code };
+  for (const field of ["position", "internalPosition"] as const) {
+    const value = pgError[field];
+    if ((typeof value === "string" && /^\d+$/.test(value)) || (typeof value === "number" && Number.isSafeInteger(value))) {
+      diagnostics[field] = String(value);
+    }
+  }
+  for (const field of ["detail", "hint", "where"] as const) {
+    const value = pgError[field];
+    if (typeof value === "string" && value.length > 0) diagnostics[field] = diagnosticErrorMessage(new Error(value));
+  }
+  return diagnostics;
+}
+
 async function loadMigrations(): Promise<MigrationFile[]> {
   const files = (await readdir(MIGRATIONS_DIR, { withFileTypes: true }))
     .filter((entry) => entry.isFile() && entry.name.endsWith(".sql"))
@@ -129,9 +156,14 @@ async function runMigrations(): Promise<void> {
           [migration.version, migration.filename, migration.checksum]
         );
         await client.query("COMMIT");
-      } catch {
+      } catch (error) {
+        const diagnostics = postgresErrorDiagnostics(error);
+        console.error(
+          `Migration ${migration.filename} failed: ${diagnosticErrorMessage(error)}`,
+          diagnostics
+        );
         await client.query("ROLLBACK").catch(() => undefined);
-        throw new Error(`Migration ${migration.filename} failed; its transaction was rolled back`);
+        throw error;
       }
     }
   } finally {
@@ -143,7 +175,8 @@ async function runMigrations(): Promise<void> {
   }
 }
 
-runMigrations().catch(() => {
-  console.error("Database migrations failed. No migration error details or credentials were printed.");
+runMigrations().catch((error: unknown) => {
+  const message = diagnosticErrorMessage(error);
+  console.error("Database migrations failed:", message, postgresErrorDiagnostics(error));
   process.exitCode = 1;
 });
