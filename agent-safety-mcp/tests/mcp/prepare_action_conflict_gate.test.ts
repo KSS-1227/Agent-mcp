@@ -14,7 +14,7 @@ import { ProvenanceGraph, setProvenanceGraph } from "../../src/conflict-engine/p
 import { ResourceService, setResourceService } from "../../src/core/resource.service";
 import { getActionProtocolTools } from "../../src/mcp/tools/actions";
 import { getVerifierRegistry, resetVerifierRegistry } from "../../src/recovery-engine/verifier_registry";
-import { GITHUB_CREATE_ISSUE, GitHubIssueVerifier } from "../../src/recovery-engine/github-issue";
+import { GITHUB_CREATE_ISSUE, GitHubIssueExecutor, GitHubIssueVerifier } from "../../src/recovery-engine/github-issue";
 
 const AGENT_ID = "11111111-1111-1111-1111-111111111111";
 
@@ -58,18 +58,30 @@ function prepareTool(db: any) {
   return getActionProtocolTools(db).find((tool) => tool.name === "prepare_action")!;
 }
 
-function prepareArgs(intentId: string, stepId: string, item = "change") {
+function prepareArgs(intentId: string, stepId: string) {
   return {
     intent_id: intentId,
     step_id: stepId,
-    action_type: "scale_cluster",
-    arguments: { item },
+    action_type: GITHUB_CREATE_ISSUE,
+    arguments: {
+      owner: "acme",
+      repository: "widgets",
+      title: "Conflict gate regression fixture",
+      body: "No external issue is created by prepare_action.",
+    },
   };
 }
 
 beforeEach(() => {
+  vi.stubEnv("NODE_ENV", "production");
+  vi.stubEnv("GITHUB_TOKEN", "github-test-token-never-log");
+  vi.stubEnv("GITHUB_REPOSITORY", "acme/widgets");
   vi.stubEnv("LLM_PROVIDER", "nvidia");
   vi.stubEnv("NVIDIA_API_KEY", "nvidia-test-key-never-log");
+  getVerifierRegistry().registerProduction(
+    GITHUB_CREATE_ISSUE,
+    new GitHubIssueVerifier("github-test-token-never-log")
+  );
 });
 
 afterEach(() => {
@@ -115,7 +127,26 @@ describe("deterministic conflict gate", () => {
     expect(query).not.toHaveBeenCalled();
   });
 
-  it("allows an unaffected step and preserves the existing write order", async () => {
+  it("reaches the conflict gate for a valid registered GitHub action before persistence, leasing, or execution", async () => {
+    const { intent, dependent } = conflictedFixture();
+    const { db, query } = fakeDatabase();
+    const execute = vi.spyOn(GitHubIssueExecutor.prototype, "execute");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(getVerifierRegistry().getProduction(GITHUB_CREATE_ISSUE)).toBeInstanceOf(GitHubIssueVerifier);
+    await expect(
+      prepareTool(db)._handler(prepareArgs(intent.id, dependent.id))
+    ).rejects.toThrow("config:retry-policy (v1 -> v2)");
+
+    expect(query).not.toHaveBeenCalled();
+    expect(query.mock.calls.some(([sql]) => /INSERT INTO (episodes|actions)/.test(String(sql)))).toBe(false);
+    expect(query.mock.calls.some(([sql]) => String(sql).includes("UPDATE actions"))).toBe(false);
+    expect(execute).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("prepares an unaffected GitHub step without authorizing execution", async () => {
     const { intent, independent } = conflictedFixture();
     const { db, query } = fakeDatabase();
 
@@ -130,7 +161,7 @@ describe("deterministic conflict gate", () => {
     expect(statements).toContain("BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE");
     expect(statements.some((sql) => sql.includes("SELECT resource_id, observed_version FROM intent_reads"))).toBe(true);
     expect(statements.some((sql) => sql.includes("INSERT INTO actions"))).toBe(true);
-    expect(statements.some((sql) => sql.includes("UPDATE actions"))).toBe(true);
+    expect(statements.some((sql) => sql.includes("UPDATE actions"))).toBe(false);
     expect(statements.at(-1)).toBe("COMMIT");
   });
 
@@ -153,7 +184,7 @@ describe("deterministic conflict gate", () => {
 
     await expect(prepareTool(db)._handler({
       ...prepareArgs(intent.id, independent.id),
-      action_type: "test-action",
+      action_type: "demo.config_update",
     })).rejects.toThrow(/Unsupported action type/);
 
     expect(query).not.toHaveBeenCalled();
@@ -189,23 +220,11 @@ describe("deterministic conflict gate", () => {
     expect(query).not.toHaveBeenCalled();
   });
 
-  it("accepts a currently supported production action when its production verifier is registered", async () => {
-    vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("GITHUB_TOKEN", "test-token-not-used-by-this-test");
-    vi.stubEnv("GITHUB_REPOSITORY", "acme/widgets");
-    getVerifierRegistry().registerProduction(
-      GITHUB_CREATE_ISSUE,
-      new GitHubIssueVerifier("test-token-not-used-by-this-test")
-    );
+  it("accepts a currently supported production action with its exact validated arguments", async () => {
     const { intent, independent } = conflictedFixture();
     const { db, query } = fakeDatabase();
 
-    const result = await prepareTool(db)._handler({
-      intent_id: intent.id,
-      step_id: independent.id,
-      action_type: GITHUB_CREATE_ISSUE,
-      arguments: { owner: "acme", repository: "widgets", title: "Test", body: "" },
-    });
+    const result = await prepareTool(db)._handler(prepareArgs(intent.id, independent.id));
 
     expect(result.disposition).toBe("OWNED");
     expect(query.mock.calls.some(([sql]) => String(sql).includes("INSERT INTO actions"))).toBe(true);
