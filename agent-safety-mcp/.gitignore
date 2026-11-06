@@ -107,3 +107,6 @@ INTERLOCK_INTEGRATION*.md
 RECONCILE_ACTION_*.md
 SUPABASE_SETUP_GUIDE.md
 INDEX.md
+
+# Local editor/MCP client config (may reference tokens)
+.cursor/
