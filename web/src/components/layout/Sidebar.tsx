@@ -128,11 +128,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
         <button
           onClick={async () => {
-            // Server-side session invalidation, then return to the login gate.
+            // Server-side session invalidation, then return to operator login.
             try {
               await fetch("/api/auth/logout", { method: "POST" });
             } finally {
-              window.location.assign("/login");
+              window.location.assign("/operator/login");
             }
           }}
           className="mt-2 w-full text-left text-[10px] text-[#9B9E96] hover:text-white hover:underline"

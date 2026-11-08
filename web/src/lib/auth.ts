@@ -16,7 +16,7 @@ import { NextResponse } from "next/server";
 
 export const SESSION_COOKIE_NAME = "asmcp_session";
 export const SESSION_TTL_SECONDS = 8 * 60 * 60;
-export const LOGIN_PATH = "/login";
+export const LOGIN_PATH = "/operator/login";
 export const AUTH_ENTRY_PATH = "/api/auth";
 
 export const AUTH_NOT_CONFIGURED_MESSAGE =
@@ -114,8 +114,8 @@ code{background:#F1EFE9;border-radius:3px;padding:1px 5px;font-size:12px}
 }
 
 /**
- * Only ever return an in-app path. Returning `/login` or an auth endpoint here
- * would make the login page redirect to itself once a session exists.
+ * Only ever return an in-app path. Returning any login page or an auth endpoint
+ * here would make the login page redirect to itself once a session exists.
  */
 export function safeNextPath(value: string | string[] | undefined): string {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -124,10 +124,15 @@ export function safeNextPath(value: string | string[] | undefined): string {
   }
 
   const path = raw.split("?")[0];
+  // Reject all login pages (operator, user, and public redirect) to prevent loops.
   if (
-    path === LOGIN_PATH ||
+    path === "/operator/login" ||
+    path === "/my/login" ||
+    path === "/login" ||
     path === AUTH_ENTRY_PATH ||
-    path.startsWith(`${LOGIN_PATH}/`) ||
+    path.startsWith("/operator/login/") ||
+    path.startsWith("/my/login/") ||
+    path.startsWith("/login/") ||
     path.startsWith(`${AUTH_ENTRY_PATH}/`)
   ) {
     return "/";

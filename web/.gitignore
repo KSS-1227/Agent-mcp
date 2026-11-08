@@ -17,3 +17,6 @@ coverage/
 
 # Captured output (not source)
 *.txt
+# Keep web tests versioned (auth/matcher regression guards)
+!tests/
+!tests/**/*.test.ts

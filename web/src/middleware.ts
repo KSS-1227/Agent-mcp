@@ -39,17 +39,22 @@ export async function middleware(request: NextRequest) {
   }
 
   const loginUrl = request.nextUrl.clone();
-  loginUrl.pathname = LOGIN_PATH;
+  loginUrl.pathname = "/my/login";
   loginUrl.search = "";
-  // Send the operator back to the page they asked for (path only, never a URL).
-  // `next` is re-validated by the login page before it is followed.
-  if (pathname !== "/") {
-    loginUrl.searchParams.set("next", pathname);
-  }
+  // User login is the public front door. Operator pages still require the operator
+  // cookie; unauthenticated visitor → /my/login (no next parameter: operator targets
+  // are meaningless in the user area).
   return NextResponse.redirect(loginUrl);
 }
 
 export const config = {
-  // Everything except Next.js internals, the login screen and the auth endpoints.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|login|api/auth).*)"],
+  // Everything except Next.js internals, public paths, and the user area.
+  // Excludes (negative lookahead):
+  //   _next/static, _next/image   — Next.js internals
+  //   favicon\.ico$               — browser requests (exact match)
+  //   login$                      — public redirect to /my/login (exact match)
+  //   operator/login(?:/|$)       — operator password form (public, not linked)
+  //   api/auth(?:/|$)             — operator login/logout endpoints
+  //   my(?:/|$)                   — user area (Supabase Auth)
+  matcher: ["/((?!_next/static|_next/image|favicon\\.ico$|login$|operator/login(?:/|$)|api/auth(?:/|$)|my(?:/|$)).*)"],
 };
