@@ -26,13 +26,14 @@ import Link from "next/link";
 import clsx from "clsx";
 
 export default function RecoveryCenterPage() {
-  const { mode, refreshKey, health } = useDashboard();
+  const { mode, refreshKey, health, scope } = useDashboard();
   const [awaitingActions, setAwaitingActions] = useState<Action[]>([]);
   const [resolvedHistory, setResolvedHistory] = useState<Action[]>([]);
   const [reconcilerKey, setReconcilerKey] = useState<string | null>(null);
   const [reconcilerNote, setReconcilerNote] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [limited, setLimited] = useState(false);
   const [selectedAction, setSelectedAction] = useState<Action | null>(null);
 
   // Manual inspection state (read-only — never triggers recovery)
@@ -61,6 +62,7 @@ export default function RecoveryCenterPage() {
       .then((data) => {
         if (isMounted) {
           setAwaitingActions(data.awaitingReconciliation || []);
+          setLimited(Boolean(data.limited));
           setResolvedHistory(data.resolvedHistory || []);
           setReconcilerKey(data.reconcilerAgentKey ?? null);
           setReconcilerNote(data.reconcilerNote ?? null);
@@ -196,7 +198,7 @@ export default function RecoveryCenterPage() {
   ];
 
   return (
-    <AppLayout title="Recovery Center & External Reconciliation">
+    <AppLayout title={scope === "user" ? "Your Recovery Activity" : "Recovery Center & External Reconciliation"}>
       {/* Policy Explainer */}
       <div className="bg-white p-4 border border-[#E5E4DE] rounded-md space-y-1">
         <div className="flex items-center justify-between">
@@ -324,9 +326,9 @@ export default function RecoveryCenterPage() {
               No Orphaned Actions Detected
             </h4>
             <p className="text-[11px] text-[#777A73] max-w-sm mx-auto mt-1">
-              No PENDING action has an expired or missing lease, and none is in an UNKNOWN effect
-              state. This reflects the rows readable from PostgreSQL; the reconciler daemon itself
-              is not observable from this dashboard.
+              {scope === "user"
+                ? "No PENDING action with an expired lease is available for inspection in your account."
+                : "No PENDING action has an expired or missing lease, and none is in an UNKNOWN effect state. This reflects the rows readable from PostgreSQL; the reconciler daemon itself is not observable from this dashboard."}
             </p>
           </div>
         ) : (
@@ -338,6 +340,12 @@ export default function RecoveryCenterPage() {
           />
         )}
       </div>
+
+      {limited && (
+        <div className="rounded border border-[#E5E4DE] bg-white p-3 text-xs text-[#777A73]">
+          Resource-version details: Not available for your account
+        </div>
+      )}
 
       {/* Historical Resolved Actions */}
       <div>

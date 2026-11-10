@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSession } from "@/lib/auth";
+import { getScope } from "@/lib/data-scope";
 import { NOT_PERSISTED } from "@/lib/not-persisted";
 import { DEMO_EVIDENCE } from "@/lib/demo-data";
 
@@ -12,8 +12,9 @@ import { DEMO_EVIDENCE } from "@/lib/demo-data";
  * Committed episodes are real and are served by /api/episodes.
  */
 export async function GET(request: Request) {
-  const unauthorized = await requireSession(request);
-  if (unauthorized) return unauthorized;
+  const scope = await getScope(request);
+  if (!scope) return NextResponse.json({ error: "Authentication required.", code: "UNAUTHENTICATED" }, { status: 401 });
+  if (scope.kind === "user") return NextResponse.json({ error: "Operator access required.", code: "OPERATOR_REQUIRED" }, { status: 403 });
 
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get("mode");

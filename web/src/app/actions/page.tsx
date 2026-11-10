@@ -23,10 +23,11 @@ import {
 import clsx from "clsx";
 
 export default function ActionLifecyclePage() {
-  const { mode, refreshKey } = useDashboard();
+  const { mode, refreshKey, scope } = useDashboard();
   const [actions, setActions] = useState<Action[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [limited, setLimited] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [selectedAction, setSelectedAction] = useState<Action | null>(null);
@@ -45,6 +46,7 @@ export default function ActionLifecyclePage() {
       .then((data) => {
         if (isMounted) {
           setActions(data.data || []);
+          setLimited(Boolean(data.limited));
           setError(null);
           setLoading(false);
         }
@@ -180,7 +182,7 @@ export default function ActionLifecyclePage() {
   ];
 
   return (
-    <AppLayout title="Action Lifecycle & Exactly-Once Protocol">
+    <AppLayout title={scope === "user" ? "Your Action Activity" : "Action Lifecycle & Exactly-Once Protocol"}>
       {/* Search and Filters */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 border border-[#E5E4DE] rounded-md">
         <div className="relative flex-1 max-w-sm">
@@ -362,6 +364,11 @@ export default function ActionLifecyclePage() {
             </div>
 
             {/* Action Arguments Payload */}
+            {limited && (
+              <div className="rounded border border-[#E5E4DE] bg-white p-3 text-xs text-[#777A73]">
+                Resource-version details: Not available for your account
+              </div>
+            )}
             <div>
               <span className="text-xs font-semibold text-[#252722] block mb-1">
                 Action Input Arguments

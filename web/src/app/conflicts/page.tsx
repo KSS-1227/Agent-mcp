@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 
 export default function ConflictMonitorPage() {
-  const { mode, refreshKey } = useDashboard();
+  const { mode, refreshKey, scope } = useDashboard();
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
   const [graphData, setGraphData] = useState<{
     nodes: GraphNode[];
@@ -46,6 +46,12 @@ export default function ConflictMonitorPage() {
   const [selectedGraphNode, setSelectedGraphNode] = useState<GraphNode | null>(null);
 
   useEffect(() => {
+    if (scope === "user") {
+      setLoading(false);
+      setConflicts([]);
+      setGraphData(null);
+      return;
+    }
     let isMounted = true;
     setLoading(true);
     setUnavailable(null);
@@ -130,7 +136,7 @@ export default function ConflictMonitorPage() {
     return () => {
       isMounted = false;
     };
-  }, [mode, refreshKey]);
+  }, [mode, refreshKey, scope]);
 
   const graphCounts = useMemo(() => {
     const nodes = graphData?.nodes ?? [];
@@ -243,6 +249,12 @@ export default function ConflictMonitorPage() {
 
   return (
     <AppLayout title="Conflict Monitor & Provenance Graph">
+      {scope === "user" ? (
+        <EmptyState
+          title="Conflict history is not available for your account"
+          description="The dashboard does not expose conflict records or a provenance graph in user scope."
+        />
+      ) : <>
       {/* Overview Banner */}
       <div className="bg-white p-4 border border-[#E5E4DE] rounded-md space-y-1">
         <div className="flex items-center justify-between">
@@ -469,6 +481,7 @@ export default function ConflictMonitorPage() {
           </div>
         )}
       </Drawer>
+      </>}
     </AppLayout>
   );
 }

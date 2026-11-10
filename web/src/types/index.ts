@@ -73,7 +73,7 @@ export interface Intent {
   /** intents.created_at, aliased to the dashboard vocabulary. */
   recordedAt: string;
   updatedAt?: string;
-  reads?: IntentRead[];
+  reads?: IntentRead[] | null;
   steps?: PlanStep[];
 }
 
@@ -146,7 +146,7 @@ export interface Action {
     resourceId: string;
     resourceKey?: string;
     observedVersion: number;
-  }>;
+  }> | null;
 }
 
 export interface ActionEvidence {

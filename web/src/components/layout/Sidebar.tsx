@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import clsx from "clsx";
+import { useDashboard } from "@/lib/dashboard-context";
 
 interface SidebarProps {
   isOpenMobile?: boolean;
@@ -38,6 +39,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
 }) => {
   const pathname = usePathname();
+  const { scope } = useDashboard();
+  const visibleItems = scope === "user"
+    ? NAV_ITEMS.filter((item) => item.href !== "/settings" && item.href !== "/evidence")
+    : NAV_ITEMS;
 
   const content = (
     <div className="flex flex-col h-full bg-[#242622] text-[#F6F5F1] select-none border-r border-[#343731]">
@@ -52,7 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               Agent Safety MCP
             </div>
             <div className="text-[10px] text-[#9B9E96] font-mono leading-none">
-              v0.1.0 · Postgres
+              {scope === "user" ? "v0.1.0" : "v0.1.0 · Postgres"}
             </div>
           </div>
         </Link>
@@ -69,9 +74,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Navigation List */}
       <nav className="flex-1 px-2.5 py-4 space-y-1 overflow-y-auto">
         <div className="px-2 pb-1.5 text-[10px] font-semibold text-[#777A73] uppercase tracking-wider">
-          Control Plane
+          {scope === "user" ? "Your workspace" : "Control Plane"}
         </div>
-        {NAV_ITEMS.map((item) => {
+        {visibleItems.map((item) => {
           const isActive =
             item.href === "/"
               ? pathname === "/"
@@ -128,11 +133,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
         <button
           onClick={async () => {
-            // Server-side session invalidation, then return to operator login.
+            // User sign-out clears the Supabase session; operators clear their signed cookie.
             try {
-              await fetch("/api/auth/logout", { method: "POST" });
+              await fetch(scope === "user" ? "/my/signout" : "/api/auth/logout", { method: "POST" });
             } finally {
-              window.location.assign("/operator/login");
+              window.location.assign(scope === "user" ? "/my/login" : "/operator/login");
             }
           }}
           className="mt-2 w-full text-left text-[10px] text-[#9B9E96] hover:text-white hover:underline"

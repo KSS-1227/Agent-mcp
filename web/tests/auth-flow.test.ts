@@ -60,11 +60,15 @@ async function issueSessionCookie(): Promise<string> {
 beforeEach(() => {
   process.env.DASHBOARD_ACCESS_TOKEN = ACCESS_TOKEN;
   process.env.DASHBOARD_SESSION_SECRET = SESSION_SECRET;
+  delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+  delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 });
 
 afterEach(() => {
   process.env.DASHBOARD_ACCESS_TOKEN = ACCESS_TOKEN;
   process.env.DASHBOARD_SESSION_SECRET = SESSION_SECRET;
+  delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+  delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 });
 
 describe("configuration gate", () => {
@@ -186,9 +190,10 @@ describe("middleware", () => {
     expect(pattern.test("/login")).toBe(false);
     expect(pattern.test("/operator/login")).toBe(false);
     expect(pattern.test("/my/login")).toBe(false);
-    expect(pattern.test("/my/agents")).toBe(false);
+    expect(pattern.test("/my/agents")).toBe(true);
+    expect(pattern.test("/my/signout")).toBe(false);
     expect(pattern.test("/api/auth/login")).toBe(false);
-    expect(pattern.test("/api/auth/logout")).toBe(false);
+    expect(pattern.test("/api/auth/logout")).toBe(true);
     // Not excluded (protected paths and false positives)
     expect(pattern.test("/loginfoo")).toBe(true);
     expect(pattern.test("/operatorlogin")).toBe(true);
@@ -291,7 +296,8 @@ describe("requireSession", () => {
 
 describe("POST /api/auth/logout", () => {
   it("clears the same cookie the login route sets", async () => {
-    const response = await logoutRoute();
+    const cookie = await issueSessionCookie();
+    const response = await logoutRoute(apiRequest("/api/auth/logout", cookie.split("=")[1]));
     expect(response.status).toBe(200);
     const setCookie = response.headers.get("set-cookie") ?? "";
     expect(setCookie.startsWith(`${SESSION_COOKIE_NAME}=;`)).toBe(true);
@@ -306,7 +312,7 @@ describe("POST /api/auth/logout", () => {
     const token = cookie.split("=")[1];
     expect((await middleware(pageRequest("/conflicts", token))).status).toBe(200);
 
-    expect((await logoutRoute()).status).toBe(200);
+    expect((await logoutRoute(apiRequest("/api/auth/logout", token))).status).toBe(200);
     // After the browser drops the cookie the request carries none.
     const afterLogout = await middleware(pageRequest("/conflicts"));
     expect(afterLogout.status).toBe(307);

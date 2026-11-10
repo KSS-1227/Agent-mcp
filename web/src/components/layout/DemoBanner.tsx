@@ -2,16 +2,25 @@ import React from "react";
 import { Info, AlertCircle } from "lucide-react";
 
 interface DemoBannerProps {
+  scope: "operator" | "user";
   mode: "live" | "demo";
   isBackendOffline?: boolean;
   onSwitchToDemo?: () => void;
 }
 
 export const DemoBanner: React.FC<DemoBannerProps> = ({
+  scope,
   mode,
   isBackendOffline,
   onSwitchToDemo,
 }) => {
+  if (scope === "user") {
+    return (
+      <div className="bg-[#EEF3EE] border-b border-[#C8D7CA] px-4 py-1.5 text-xs text-[#35543B]">
+        <strong>Your agents only</strong> · Live activity available through your account.
+      </div>
+    );
+  }
   if (mode === "demo") {
     return (
       <div className="bg-[#FAF4E8] border-b border-[#E9D8B4] px-4 py-1.5 text-xs text-[#8C631B] flex items-center justify-between">

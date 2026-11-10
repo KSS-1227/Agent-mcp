@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { checkBackendHealth, fetchDatabaseCapabilities, isDatabaseConfigured } from "@/lib/server-db";
-import { SESSION_TTL_SECONDS, requireSession } from "@/lib/auth";
+import { SESSION_TTL_SECONDS } from "@/lib/auth";
+import { getScope } from "@/lib/data-scope";
 
 /**
  * Configuration/health report.
@@ -11,9 +11,11 @@ import { SESSION_TTL_SECONDS, requireSession } from "@/lib/auth";
  * or raw driver message is ever returned to the browser.
  */
 export async function GET(request: Request) {
-  const unauthorized = await requireSession(request);
-  if (unauthorized) return unauthorized;
+  const scope = await getScope(request);
+  if (!scope) return NextResponse.json({ error: "Authentication required.", code: "UNAUTHENTICATED" }, { status: 401 });
+  if (scope.kind === "user") return NextResponse.json({ error: "Operator access required.", code: "OPERATOR_REQUIRED" }, { status: 403 });
 
+  const { checkBackendHealth, fetchDatabaseCapabilities, isDatabaseConfigured } = await import("@/lib/server-db");
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get("mode");
   const health = await checkBackendHealth();

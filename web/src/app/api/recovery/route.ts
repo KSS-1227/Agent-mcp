@@ -1,17 +1,37 @@
 import { NextResponse } from "next/server";
-import { fetchLiveActions, fetchLiveActionByKey } from "@/lib/server-db";
-import { requireSession } from "@/lib/auth";
+import { getScope } from "@/lib/data-scope";
 import { DEMO_ACTIONS } from "@/lib/demo-data";
+import type { Action } from "@/types";
 
 /** Idempotency keys are SHA-256 hex (or opaque VARCHAR(255)) — never SQL, but validate anyway. */
 const ACTION_KEY_PATTERN = /^[A-Za-z0-9:_-]{1,255}$/;
 
 export async function GET(request: Request) {
-  const unauthorized = await requireSession(request);
-  if (unauthorized) return unauthorized;
+  const scope = await getScope(request);
+  if (!scope) return NextResponse.json({ error: "Authentication required.", code: "UNAUTHENTICATED" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get("mode");
+
+  if (scope.kind === "user") {
+    const { data: rows, error } = await scope.supabase.from("actions")
+      .select("idempotency_key, episode_id, agent_id, action_type, arguments, status, lease_owner, lease_expires_at, external_reference, outcome, attempts, created_at, resolved_at, effect_state, effect_started_at, effect_completed_at, verifier_response, verified_at")
+      .eq("status", "PENDING")
+      .lt("lease_expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false });
+    if (error) return NextResponse.json({ awaitingReconciliation: [], resolvedHistory: [], reconcilerAgentKey: null, reconcilerNote: null, isDemo: false, limited: true, error: "Could not load recovery actions.", code: "USER_QUERY_FAILED" }, { status: 503 });
+    const awaitingReconciliation: Action[] = (rows ?? []).map((row) => ({
+      idemKey: row.idempotency_key, episodeId: row.episode_id, agentId: row.agent_id,
+      actionType: row.action_type, actionArgs: row.arguments, status: row.status,
+      leaseOwner: row.lease_owner ?? undefined, leaseExpires: row.lease_expires_at ?? undefined,
+      externalRef: row.external_reference ?? undefined, outcome: row.outcome ?? undefined,
+      attempts: row.attempts, createdAt: row.created_at, resolvedAt: row.resolved_at ?? undefined,
+      effectState: row.effect_state, effectStartedAt: row.effect_started_at ?? undefined,
+      effectCompletedAt: row.effect_completed_at ?? undefined, verifierResponse: row.verifier_response,
+      verifiedAt: row.verified_at, resourceVersions: null,
+    } as Action));
+    return NextResponse.json({ awaitingReconciliation, resolvedHistory: [], reconcilerAgentKey: null, reconcilerNote: "Recovery details are limited to your own action rows.", isDemo: false, limited: true });
+  }
 
   if (mode === "demo") {
     const awaitingReconciliation = DEMO_ACTIONS.filter(
@@ -35,6 +55,7 @@ export async function GET(request: Request) {
     });
   }
 
+  const { fetchLiveActions } = await import("@/lib/server-db");
   const result = await fetchLiveActions();
   if (!result.ok) {
     return NextResponse.json(
@@ -84,8 +105,8 @@ export async function GET(request: Request) {
  * backend has already recorded a verifier disposition.
  */
 export async function POST(request: Request) {
-  const unauthorized = await requireSession(request);
-  if (unauthorized) return unauthorized;
+  const scope = await getScope(request);
+  if (!scope) return NextResponse.json({ error: "Authentication required.", code: "UNAUTHENTICATED" }, { status: 401 });
 
   let body: { actionKey?: unknown; mode?: unknown } | null = null;
   try {
@@ -102,6 +123,25 @@ export async function POST(request: Request) {
     );
   }
 
+  if (scope.kind === "user") {
+    const { data: row, error } = await scope.supabase.from("actions")
+      .select("idempotency_key, status, effect_state, lease_owner, lease_expires_at, attempts, external_reference, verifier_response, verified_at, resolved_at")
+      .eq("idempotency_key", actionKey)
+      .maybeSingle();
+    if (error) return NextResponse.json({ error: "Could not inspect this action.", code: "USER_QUERY_FAILED" }, { status: 503 });
+    if (!row) return NextResponse.json({ error: "No action with that idempotency key exists.", code: "ACTION_NOT_FOUND" }, { status: 404 });
+    return NextResponse.json({
+      success: true, operation: "inspect", isDemo: false, simulated: false, limited: true,
+      actionKey: row.idempotency_key,
+      action: {
+        status: row.status, effectState: row.effect_state, leaseOwner: row.lease_owner,
+        leaseExpires: row.lease_expires_at, attempts: row.attempts, externalRef: row.external_reference,
+        verifierResponse: row.verifier_response, verifiedAt: row.verified_at, resolvedAt: row.resolved_at,
+      },
+      message: "Read-only inspection complete. No action or other row was changed.",
+    });
+  }
+
   if (body?.mode === "demo") {
     return NextResponse.json({
       success: true,
@@ -115,6 +155,7 @@ export async function POST(request: Request) {
     });
   }
 
+  const { fetchLiveActionByKey } = await import("@/lib/server-db");
   const result = await fetchLiveActionByKey(actionKey);
   if (!result.ok) {
     return NextResponse.json(

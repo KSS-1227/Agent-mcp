@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { fetchLiveProvenance } from "@/lib/server-db";
-import { requireSession } from "@/lib/auth";
+import { getScope } from "@/lib/data-scope";
 
 /**
  * Live provenance graph built from agents, intents, intent_reads and resources.
@@ -11,9 +10,11 @@ import { requireSession } from "@/lib/auth";
  * safety valve instead of silently dropping rows.
  */
 export async function GET(request: Request) {
-  const unauthorized = await requireSession(request);
-  if (unauthorized) return unauthorized;
+  const scope = await getScope(request);
+  if (!scope) return NextResponse.json({ error: "Authentication required.", code: "UNAUTHENTICATED" }, { status: 401 });
+  if (scope.kind === "user") return NextResponse.json({ error: "Operator access required.", code: "OPERATOR_REQUIRED" }, { status: 403 });
 
+  const { fetchLiveProvenance } = await import("@/lib/server-db");
   const result = await fetchLiveProvenance();
   if (!result.ok) {
     return NextResponse.json(

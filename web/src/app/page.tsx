@@ -23,10 +23,11 @@ import {
 import Link from "next/link";
 
 export default function OverviewPage() {
-  const { mode, refreshKey, health } = useDashboard();
+  const { mode, refreshKey, health, scope } = useDashboard();
   const [metrics, setMetrics] = useState<OverviewMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [source, setSource] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -42,6 +43,7 @@ export default function OverviewPage() {
       .then((data) => {
         if (isMounted) {
           setMetrics(data.data);
+          setSource(data.source ?? null);
           setError(null);
           setLoading(false);
         }
@@ -60,7 +62,7 @@ export default function OverviewPage() {
   }, [mode, refreshKey]);
 
   return (
-    <AppLayout title="System Overview">
+    <AppLayout title={scope === "user" ? "Your Activity" : "System Overview"}>
       {/* Top Banner Explaining Telemetry Source */}
       <div className="bg-white border border-[#E5E4DE] rounded-md px-4 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
@@ -74,7 +76,7 @@ export default function OverviewPage() {
         <div className="flex items-center gap-2 text-xs">
           <span className="text-[#777A73]">Telemetry Source:</span>
           <span className="font-mono bg-[#F3F4F6] px-2 py-0.5 rounded text-[#252722] border border-[#E5E7EB]">
-            {mode === "demo" ? "demo-fixtures (static)" : "postgresql (live cluster)"}
+            {scope === "user" ? "supabase-session" : source ?? (mode === "demo" ? "demo-fixtures (static)" : "live")}
           </span>
         </div>
       </div>
@@ -85,14 +87,14 @@ export default function OverviewPage() {
         <EmptyState
           title="Backend Telemetry Unavailable"
           description={error}
-          action={
+          action={scope === "user" ? undefined : (
             <Link
               href="/settings"
               className="px-3 py-1.5 text-xs bg-[#52745B] text-white rounded font-medium hover:bg-[#44624C]"
             >
               Inspect Backend Settings
             </Link>
-          }
+          )}
         />
       ) : metrics ? (
         <>
@@ -146,7 +148,7 @@ export default function OverviewPage() {
               </div>
               <div className="mt-2 flex items-baseline gap-2">
                 <span className="text-2xl font-bold font-mono text-[#252722]">
-                  {metrics.detectedConflicts === null ? "—" : metrics.detectedConflicts}
+                {metrics.detectedConflicts === null ? "—" : metrics.detectedConflicts}
                 </span>
                 <span className="text-[11px] text-[#777A73]">not persisted</span>
               </div>
@@ -179,7 +181,7 @@ export default function OverviewPage() {
             </Card>
           </div>
 
-          {/* Action Outcomes Breakdown & Component Health */}
+          {/* User metrics are scoped; operational health is operator-only. */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Outcome Stats Card */}
             <Card
@@ -214,17 +216,17 @@ export default function OverviewPage() {
                   </p>
                 )}
 
-                <div className="pt-2 text-[11px] text-[#777A73] leading-relaxed">
+                {scope === "operator" && <div className="pt-2 text-[11px] text-[#777A73] leading-relaxed">
                   <p>
                     <strong>Invariant:</strong> Phase 3 commits intent resolution, world state,
                     and episode embeddings inside a single serializable PostgreSQL transaction.
                   </p>
-                </div>
+                </div>}
               </div>
             </Card>
 
             {/* Core Component Health Status Card — every tile reflects a real probe */}
-            <Card
+            {scope === "operator" && <Card
               title="System Component Status"
               description="Only subsystems the dashboard can actually probe are asserted here"
               className="lg:col-span-2"
@@ -332,13 +334,13 @@ export default function OverviewPage() {
                 </Link>
                 .
               </div>
-            </Card>
+            </Card>}
           </div>
 
           {/* Recent Operational Activity Feed */}
           <Card
             title="Recent Activity Feed"
-            description="Chronological log of coordination, conflict detection, and reconciliation events"
+            description={scope === "user" ? "Recent activity for your agents" : "Chronological log of coordination, conflict detection, and reconciliation events"}
           >
             <div className="divide-y divide-[#E5E4DE]">
               {metrics.recentActivity.length === 0 ? (

@@ -4,6 +4,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { SystemHealth } from "@/types";
 
 interface DashboardContextType {
+  scope: "operator" | "user";
+  userEmail: string | null;
   mode: "live" | "demo";
   setMode: (m: "live" | "demo") => void;
   toggleMode: () => void;
@@ -34,13 +36,18 @@ function unreachableHealth(errorCode?: string): SystemHealth {
   };
 }
 
-export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [mode, setMode] = useState<"live" | "demo">("demo"); // default to demo so users immediately see domain visuals
+export const DashboardProvider: React.FC<{
+  children: React.ReactNode;
+  scope: "operator" | "user";
+  userEmail: string | null;
+}> = ({ children, scope, userEmail }) => {
+  const [mode, setMode] = useState<"live" | "demo">(scope === "user" ? "live" : "demo");
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const checkHealth = useCallback(async () => {
+    if (scope === "user") return;
     try {
       const res = await fetch("/api/health");
       const body = await res.json().catch(() => null);
@@ -52,13 +59,17 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } catch {
       setHealth(unreachableHealth("HEALTH_CHECK_UNREACHABLE"));
     }
-  }, []);
+  }, [scope]);
 
   useEffect(() => {
+    if (scope === "user") {
+      setHealth(null);
+      return;
+    }
     checkHealth();
     const timer = setInterval(checkHealth, 30_000);
     return () => clearInterval(timer);
-  }, [checkHealth, refreshKey]);
+  }, [checkHealth, refreshKey, scope]);
 
   const triggerRefresh = useCallback(() => {
     setIsRefreshing(true);
@@ -71,11 +82,14 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     triggerRefresh();
   }, [triggerRefresh]);
 
-  const isBackendOffline = mode === "live" && health !== null && health.status !== "healthy";
+  const isBackendOffline =
+    scope === "operator" && mode === "live" && health !== null && health.status !== "healthy";
 
   return (
     <DashboardContext.Provider
       value={{
+        scope,
+        userEmail,
         mode,
         setMode,
         toggleMode,

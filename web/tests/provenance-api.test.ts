@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextResponse } from "next/server";
 
 const fetchLiveProvenance = vi.fn();
-const requireSession = vi.fn();
+const getScope = vi.fn();
 
 vi.mock("@/lib/server-db", () => ({ fetchLiveProvenance }));
-vi.mock("@/lib/auth", () => ({ requireSession }));
+vi.mock("@/lib/data-scope", () => ({ getScope }));
 
 const { GET } = await import("@/app/api/provenance/route");
 
@@ -34,7 +34,7 @@ const call = () => GET(new Request("http://localhost:3000/api/provenance"));
 
 beforeEach(() => {
   vi.clearAllMocks();
-  requireSession.mockResolvedValue(null);
+  getScope.mockResolvedValue({ kind: "operator" });
   fetchLiveProvenance.mockResolvedValue(graphFixture());
 });
 
@@ -81,9 +81,7 @@ describe("GET /api/provenance", () => {
   });
 
   it("returns the guard response when the session is not valid", async () => {
-    requireSession.mockResolvedValue(
-      NextResponse.json({ error: "Authentication required.", code: "UNAUTHENTICATED" }, { status: 401 })
-    );
+    getScope.mockResolvedValue(null);
 
     const response = await call();
     expect(response.status).toBe(401);

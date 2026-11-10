@@ -13,7 +13,7 @@ interface AppLayoutProps {
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ title, children }) => {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const { mode, toggleMode, setMode, health, isBackendOffline, triggerRefresh, isRefreshing } =
+  const { scope, mode, toggleMode, setMode, health, isBackendOffline, triggerRefresh, isRefreshing } =
     useDashboard();
 
   return (
@@ -39,6 +39,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ title, children }) => {
 
         {/* Demo / Offline Warning Banner */}
         <DemoBanner
+          scope={scope}
           mode={mode}
           isBackendOffline={isBackendOffline}
           onSwitchToDemo={() => setMode("demo")}

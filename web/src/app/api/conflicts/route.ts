@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSession } from "@/lib/auth";
+import { getScope } from "@/lib/data-scope";
 import { NOT_PERSISTED } from "@/lib/not-persisted";
 import { DEMO_CONFLICTS, DEMO_PROVENANCE_GRAPH } from "@/lib/demo-data";
 
@@ -12,13 +12,13 @@ import { DEMO_CONFLICTS, DEMO_PROVENANCE_GRAPH } from "@/lib/demo-data";
  * empty history. Live provenance is served separately by /api/provenance.
  */
 export async function GET(request: Request) {
-  const unauthorized = await requireSession(request);
-  if (unauthorized) return unauthorized;
+  const scope = await getScope(request);
+  if (!scope) return NextResponse.json({ error: "Authentication required.", code: "UNAUTHENTICATED" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get("mode");
 
-  if (mode === "demo") {
+  if (scope.kind === "operator" && mode === "demo") {
     return NextResponse.json({
       data: DEMO_CONFLICTS,
       graph: DEMO_PROVENANCE_GRAPH,
@@ -34,8 +34,8 @@ export async function GET(request: Request) {
       supported: false,
       isDemo: false,
       code: NOT_PERSISTED.conflicts.code,
-      error: NOT_PERSISTED.conflicts.message,
-      detail: NOT_PERSISTED.conflicts.detail,
+      error: scope.kind === "user" ? "Conflict history is not available for your account." : NOT_PERSISTED.conflicts.message,
+      detail: scope.kind === "user" ? "Conflict adjudications are not exposed in user scope." : NOT_PERSISTED.conflicts.detail,
     },
     { status: 501 }
   );

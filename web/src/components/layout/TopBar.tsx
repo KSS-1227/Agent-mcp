@@ -6,6 +6,7 @@ import clsx from "clsx";
 import { Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
 import { SystemHealth } from "@/types";
+import { useDashboard } from "@/lib/dashboard-context";
 
 interface TopBarProps {
   onOpenMobileNav: () => void;
@@ -26,7 +27,9 @@ export const TopBar: React.FC<TopBarProps> = ({
   onRefresh,
   isRefreshing = false,
 }) => {
+  const { scope, userEmail } = useDashboard();
   const getBackendBadge = () => {
+    if (scope === "user") return <Badge variant="neutral" dot size="sm">Live</Badge>;
     if (mode === "demo") {
       return (
         <Badge variant="olive" dot size="sm">
@@ -86,10 +89,16 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       {/* Right Controls */}
       <div className="flex items-center gap-2.5">
+        {scope === "user" && (
+          <span className="hidden sm:inline text-[11px] text-[#52745B]">
+            <strong>Your agents only</strong>{userEmail ? ` · ${userEmail}` : ""}
+          </span>
+        )}
         {/* Backend Connectivity Status */}
         <div className="hidden sm:flex items-center gap-1.5">{getBackendBadge()}</div>
 
         {/* Mode Toggle Switch */}
+        {scope === "operator" && (
         <div className="flex items-center bg-[#F6F5F1] p-0.5 rounded border border-[#E5E4DE]">
           <button
             onClick={() => mode !== "live" && onToggleMode()}
@@ -116,6 +125,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             Demo Mode
           </button>
         </div>
+        )}
 
         {/* Refresh Button */}
         <Button

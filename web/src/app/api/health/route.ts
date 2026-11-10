@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
-import { checkBackendHealth } from "@/lib/server-db";
-import { requireSession } from "@/lib/auth";
+import { getScope } from "@/lib/data-scope";
 
 /**
  * Live reachability probe. There is deliberately no demo branch: demo fixtures
  * only exist for dashboard content, and must never fabricate backend health.
  */
 export async function GET(request: Request) {
-  const unauthorized = await requireSession(request);
-  if (unauthorized) return unauthorized;
+  const scope = await getScope(request);
+  if (!scope) return NextResponse.json({ error: "Authentication required.", code: "UNAUTHENTICATED" }, { status: 401 });
+  if (scope.kind === "user") return NextResponse.json({ error: "Operator access required.", code: "OPERATOR_REQUIRED" }, { status: 403 });
 
   try {
+    const { checkBackendHealth } = await import("@/lib/server-db");
     const health = await checkBackendHealth();
     return NextResponse.json(health);
   } catch {

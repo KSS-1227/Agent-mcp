@@ -24,39 +24,41 @@ import {
 import clsx from "clsx";
 
 export default function IntentsAndResourcesPage() {
-  const { mode, refreshKey } = useDashboard();
+  const { mode, refreshKey, scope } = useDashboard();
   const [activeTab, setActiveTab] = useState<"intents" | "resources">("intents");
   const [intents, setIntents] = useState<Intent[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [limited, setLimited] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedIntent, setSelectedIntent] = useState<Intent | null>(null);
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
 
   useEffect(() => {
+    if (scope === "user") setActiveTab("intents");
     let isMounted = true;
     setLoading(true);
-    Promise.all([
-      fetch(`/api/intents?mode=${mode}`).then(async (res) => {
+    const intentsRequest = fetch(`/api/intents?mode=${mode}`).then(async (res) => {
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.error || `Intents request failed (HTTP ${res.status})`);
         }
         return res.json();
-      }),
-      fetch(`/api/resources?mode=${mode}`).then(async (res) => {
+      });
+    const resourcesRequest = scope === "user" ? Promise.resolve({ data: [], isDemo: false }) : fetch(`/api/resources?mode=${mode}`).then(async (res) => {
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.error || `Resources request failed (HTTP ${res.status})`);
         }
         return res.json();
-      }),
-    ])
+      });
+    Promise.all([intentsRequest, resourcesRequest])
       .then(([intentsRes, resourcesRes]) => {
         if (isMounted) {
           setIntents(intentsRes.data || []);
           setResources(resourcesRes.data || []);
+          setLimited(Boolean(intentsRes.limited));
           setError(null);
           setLoading(false);
         }
@@ -73,7 +75,7 @@ export default function IntentsAndResourcesPage() {
     return () => {
       isMounted = false;
     };
-  }, [mode, refreshKey]);
+  }, [mode, refreshKey, scope]);
 
   const filteredIntents = useMemo(() => {
     return intents.filter(
@@ -133,7 +135,10 @@ export default function IntentsAndResourcesPage() {
     {
       header: "Observed Reads",
       cell: (intent: Intent) => {
-        const reads = intent.reads || [];
+        const reads = intent.reads ?? [];
+        if (limited || intent.reads === null) {
+          return <span className="text-[11px] text-[#777A73]">Not available for your account</span>;
+        }
         if (reads.length === 0) {
           return <span className="text-[11px] text-[#777A73]">None</span>;
         }
@@ -233,7 +238,7 @@ export default function IntentsAndResourcesPage() {
           >
             Declared Intents ({intents.length})
           </button>
-          <button
+          {scope === "operator" && <button
             onClick={() => setActiveTab("resources")}
             className={clsx(
               "px-3 py-1.5 text-xs font-medium rounded transition-all",
@@ -243,7 +248,7 @@ export default function IntentsAndResourcesPage() {
             )}
           >
             Protected Resources ({resources.length})
-          </button>
+          </button>}
         </div>
 
         <div className="relative flex-1 max-w-sm">
@@ -266,7 +271,7 @@ export default function IntentsAndResourcesPage() {
         <TableSkeleton rows={5} />
       ) : error ? (
         <EmptyState title="Telemetry Load Failed" description={error} />
-      ) : activeTab === "intents" ? (
+      ) : activeTab === "intents" || scope === "user" ? (
         <Table
           columns={intentColumns}
           data={filteredIntents}
@@ -325,7 +330,9 @@ export default function IntentsAndResourcesPage() {
               <h4 className="text-xs font-semibold text-[#252722] mb-2">
                 Resource Version Observations
               </h4>
-              {!selectedIntent.reads || selectedIntent.reads.length === 0 ? (
+              {limited || selectedIntent.reads === null ? (
+                <div className="p-3 text-xs text-[#777A73] border border-[#E5E4DE] rounded bg-white">Not available for your account</div>
+              ) : !selectedIntent.reads || selectedIntent.reads.length === 0 ? (
                 <div className="p-3 text-xs text-[#777A73] border border-[#E5E4DE] rounded bg-white">
                   No prior reads declared for this intent.
                 </div>

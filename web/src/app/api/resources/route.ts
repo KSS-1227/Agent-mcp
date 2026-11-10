@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { fetchLiveResources } from "@/lib/server-db";
-import { requireSession } from "@/lib/auth";
+import { getScope } from "@/lib/data-scope";
 import { DEMO_RESOURCES } from "@/lib/demo-data";
 
 export async function GET(request: Request) {
-  const unauthorized = await requireSession(request);
-  if (unauthorized) return unauthorized;
+  const scope = await getScope(request);
+  if (!scope) return NextResponse.json({ error: "Authentication required.", code: "UNAUTHENTICATED" }, { status: 401 });
+  if (scope.kind === "user") return NextResponse.json({ error: "Operator access required.", code: "OPERATOR_REQUIRED" }, { status: 403 });
 
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get("mode");
@@ -19,6 +19,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ data: DEMO_RESOURCES, isDemo: true });
   }
 
+  const { fetchLiveResources } = await import("@/lib/server-db");
   const result = await fetchLiveResources();
   if (!result.ok) {
     return NextResponse.json(
