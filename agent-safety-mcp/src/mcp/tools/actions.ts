@@ -5,6 +5,7 @@
  * Reuses existing ActionCoordinator for crash-safe semantics.
  */
 
+import { createHash } from "node:crypto";
 import { ActionCoordinator } from "../../recovery-engine/coordinator";
 import { ActionReconciler } from "../../recovery-engine/reconciliation";
 import { getVerifierRegistry, ProductionActionVerifierDispatcher } from "../../recovery-engine/verifier_registry";
@@ -242,6 +243,65 @@ export function getActionProtocolTools(database?: DatabaseClient): ToolWithHandl
         intentService
       );
       if (conflict.affectedSteps.includes(step.seq)) {
+        const affected = new Set(conflict.affectedSteps);
+        const preservedSteps = intentService
+          .getIntentSteps(args.intent_id)
+          .filter((intentStep) => !affected.has(intentStep.seq))
+          .map((intentStep) => intentStep.seq);
+        const dedupeMaterial = [
+          args.intent_id,
+          ...conflict.diff.changes
+            .map(
+              (change) =>
+                `${change.resourceId}:${change.thenVersion}->${change.nowVersion}`
+            )
+            .sort(),
+        ].join("|");
+        const dedupeKey = createHash("sha256")
+          .update(dedupeMaterial)
+          .digest("hex");
+        const resourceChanges = conflict.diff.changes.map((change) => ({
+          key: change.key,
+          kind: change.kind,
+          from: change.thenVersion,
+          to: change.nowVersion,
+        }));
+
+        // Persistence follows the refusal decision and cannot change its result.
+        let timeout: ReturnType<typeof setTimeout> | undefined;
+        try {
+          await Promise.race([
+            (db as any).pool.query(
+              `INSERT INTO conflicts
+                (intent_id, conflicting_intent_id, conflict_type, severity,
+                 reason, decision, affected_steps, preserved_steps,
+                 resource_changes, dedupe_key)
+               VALUES ($1, NULL, 'STALE_READ', 'HIGH', $2, 'REFUSED',
+                       $3::jsonb, $4::jsonb, $5::jsonb, $6)
+               ON CONFLICT (dedupe_key) WHERE dedupe_key IS NOT NULL
+               DO NOTHING`,
+              [
+                args.intent_id,
+                conflict.rationale,
+                JSON.stringify(conflict.affectedSteps),
+                JSON.stringify(preservedSteps),
+                JSON.stringify(resourceChanges),
+                dedupeKey,
+              ]
+            ),
+            new Promise((resolve) => {
+              timeout = setTimeout(resolve, 1500);
+            }),
+          ]);
+        } catch (persistError) {
+          console.warn(
+            "[conflicts] could not persist conflict:",
+            persistError instanceof Error ? persistError.message : "unknown error"
+          );
+        } finally {
+          if (timeout) clearTimeout(timeout);
+        }
+
         const causes = conflict.diff.changes
           .filter(
             (change) =>

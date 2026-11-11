@@ -101,7 +101,80 @@ describe("deterministic conflict gate", () => {
       prepareTool(db)._handler(prepareArgs(intent.id, dependent.id))
     ).rejects.toThrow(/depends on a resource that changed/);
 
-    expect(query).not.toHaveBeenCalled();
+    const statements = query.mock.calls.map(([sql]) => String(sql));
+    expect(
+      statements.some((sql) => /INSERT INTO (actions|episodes)|UPDATE actions/i.test(sql))
+    ).toBe(false);
+    expect(
+      statements.filter((sql) => /INSERT INTO conflicts/i.test(sql))
+    ).toHaveLength(1);
+  });
+
+  it("keeps the refusal unchanged when conflict persistence rejects", async () => {
+    const { intent, dependent } = conflictedFixture();
+    const { db, query } = fakeDatabase();
+    query.mockImplementation(async (sql: string) => {
+      if (/INSERT INTO conflicts/i.test(sql)) {
+        throw new Error("conflict insert failed");
+      }
+      return sql.includes("AS difference")
+        ? { rows: [{ difference: 0 }], rowCount: 1 }
+        : { rows: [], rowCount: 1 };
+    });
+
+    await expect(
+      prepareTool(db)._handler(prepareArgs(intent.id, dependent.id))
+    ).rejects.toThrow(
+      /Cannot prepare action: step \d+ depends on a resource that changed after the intent was declared: config:retry-policy \(v1 -> v2\)\. Re-read the resource and re-declare the intent before acting\./
+    );
+  });
+
+  it("keeps the refusal when conflict persistence never resolves", async () => {
+    vi.useFakeTimers();
+    try {
+      const { intent, dependent } = conflictedFixture();
+      const { db, query } = fakeDatabase();
+      query.mockImplementation((sql: string) => {
+        if (/INSERT INTO conflicts/i.test(sql)) return new Promise(() => {});
+        return Promise.resolve(
+          sql.includes("AS difference")
+            ? { rows: [{ difference: 0 }], rowCount: 1 }
+            : { rows: [], rowCount: 1 }
+        );
+      });
+
+      const pending = prepareTool(db)._handler(
+        prepareArgs(intent.id, dependent.id)
+      );
+      const assertion = expect(pending).rejects.toThrow(
+        /Cannot prepare action: step \d+ depends on a resource that changed after the intent was declared: config:retry-policy \(v1 -> v2\)\. Re-read the resource and re-declare the intent before acting\./
+      );
+      await vi.advanceTimersByTimeAsync(1500);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not include resource state or bodies in conflict insert parameters", async () => {
+    const { intent, dependent } = conflictedFixture();
+    const { db, query } = fakeDatabase();
+
+    await expect(
+      prepareTool(db)._handler(prepareArgs(intent.id, dependent.id))
+    ).rejects.toThrow(/depends on a resource that changed/);
+
+    const insert = query.mock.calls.find(([sql]) =>
+      /INSERT INTO conflicts/i.test(String(sql))
+    );
+    expect(insert).toBeDefined();
+    const params = insert?.[1] ?? [];
+    expect(JSON.stringify(params)).not.toContain("retries");
+    expect(JSON.stringify(params)).not.toContain("state");
+    const changes = JSON.parse(String(params[4]));
+    expect(changes).toEqual([
+      { key: "config:retry-policy", kind: "config", from: 1, to: 2 },
+    ]);
   });
 
   it("names the changed resource and versions in the rejection", async () => {
@@ -124,7 +197,11 @@ describe("deterministic conflict gate", () => {
     ).rejects.toThrow(/depends on a resource that changed/);
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(query).not.toHaveBeenCalled();
+    expect(
+      query.mock.calls.some(([sql]) =>
+        /INSERT INTO (actions|episodes)|UPDATE actions/i.test(String(sql))
+      )
+    ).toBe(false);
   });
 
   it("reaches the conflict gate for a valid registered GitHub action before persistence, leasing, or execution", async () => {
@@ -139,7 +216,6 @@ describe("deterministic conflict gate", () => {
       prepareTool(db)._handler(prepareArgs(intent.id, dependent.id))
     ).rejects.toThrow("config:retry-policy (v1 -> v2)");
 
-    expect(query).not.toHaveBeenCalled();
     expect(query.mock.calls.some(([sql]) => /INSERT INTO (episodes|actions)/.test(String(sql)))).toBe(false);
     expect(query.mock.calls.some(([sql]) => String(sql).includes("UPDATE actions"))).toBe(false);
     expect(execute).not.toHaveBeenCalled();
