@@ -126,9 +126,9 @@ Layers, top to bottom:
 .
 ├── agent-safety-mcp/            # The deliverable — TypeScript MCP server
 │   ├── src/
-│   │   ├── actions/             # Exactly-once protocol: coordinator, reconciliation,
+│   │   ├── recovery-engine/             # Exactly-once protocol: coordinator, reconciliation,
 │   │   │                        #   idempotency, verifier registry, GitHub verifier
-│   │   ├── conflict/            # Conflict engine: intents, detection, provenance, vectors
+│   │   ├── conflict-engine/            # Conflict engine: intents, detection, provenance, vectors
 │   │   ├── core/                # Shared agent / resource / task model
 │   │   ├── mcp/                 # Server, transports, tool registrations, authorization
 │   │   ├── auth/                # JWT verification, user→agent mapping, permissions
@@ -137,7 +137,7 @@ Layers, top to bottom:
 │   │   ├── database/            # PostgreSQL client
 │   │   ├── health/              # Health server and checks
 │   │   └── scripts/             # Migration runner
-│   ├── supabase/migrations/     # 18 schema migrations (pgvector, tables, constraints)
+│   ├── supabase/migrations/     # 24 schema migrations (pgvector, tables, constraints)
 │   ├── scripts/demo.ts          # End-to-end demo / seed entrypoint
 │   └── tests/                   # Offline suites by default; live DB suites are opt-in
 │
@@ -310,7 +310,7 @@ system-only, gated by `SYSTEM_AGENT_IDS`.
 
 ## Data model
 
-18 migrations in `agent-safety-mcp/supabase/migrations/`, applied in order. The
+24 migrations in `agent-safety-mcp/supabase/migrations/`, applied in order. The
 load-bearing invariants:
 
 | Invariant | Where |
@@ -505,7 +505,7 @@ kept, what changed, and what was intentionally left behind.
 | **Embeddings** | Cloudflare Workers AI BGE-M3 or Bedrock Titan Text Embeddings V2, 1024 dimensions | Existing `episodes.embedding` / `intents.embedding` pgvector contract remains 1024 dimensions; recovery provider is explicitly selected |
 | **Concurrency** | Out of scope | Conflict engine added (declare/watch/diff/adjudicate) with a deterministic gate inside `prepare_action` |
 | **Identity and authorization** | Scope isolation in SQL, Secrets Manager for credentials | JWT verification, user→agent mapping, per-tool fail-closed authorization, system-only tool set |
-| **Schema** | 6 tables | 13 application tables across 18 migrations, including effect-state columns, verifier evidence, resource-version snapshots, and an external-effect test ledger |
+| **Schema** | 6 tables | 13 application tables across 24 migrations, including effect-state columns, verifier evidence, resource-version snapshots, and an external-effect test ledger |
 | **Protocol shape** | 3 phases + effect states, verbatim in Go | Same three phases, dispositions, effect states, and three-valued verdicts in TypeScript (`agent-safety-mcp/src/recovery-engine/idempotency.ts`, `coordinator.ts`, `reconciliation.ts`) |
 | **Not carried** | Panel UI, `cmd/bench`/`cmd/compare`, payments example, control experiment, Lambda/API Gateway deploy | Out of scope by design; the protocol is what was taken, not the demo site |
 
@@ -560,6 +560,37 @@ execution.
   the server does not need the agent's reasoning.
 
 ---
+
+## Verification status
+
+[#verification-status](#verification-status)
+
+What has actually been run, and how. Anything not listed here has not been verified.
+
+| Area | How it was tested | Result |
+|---|---|---|
+| Backend, offline | `npm run test:run` (no database) | 632 passed, 42 skipped (live suites), 1 failing: an environment-dependent GitHub test that needs `GITHUB_REPOSITORY` |
+| Concurrency, live Postgres | Opt-in suite over the Supabase REST API, disposable project | 7 passed (idempotency-key deduplication, parallel writes, lease claims) |
+| Crash recovery, live Postgres | Opt-in suite that forks and kills coordinator/reconciler subprocesses | 4 scenarios passed (crash before effect, crash after effect, UNKNOWN escalates without retry, repeated reconciliation adds no duplicate) |
+| Other live suites | `phase-10c`, `10d`, `10e`, `real-supabase` | 34 tests passed |
+| Conflict gate + recovery together | One live scenario: declare intent, prepare, expire lease, another agent bumps the resource, reconcile, retry | Recovery committed the action once; the gate then refused the stale step and named the resource and versions. Uses a test verifier and a real Cloudflare embedder |
+| Row isolation between users | Manual SQL transactions as the `authenticated` role in a disposable project (agents, actions, conflicts, column-level grants) | Verified; not automated |
+| Web dashboard | `npm test` (55 passed), production build, manual browser checks | A signed-in user receives 403 from operator-only routes and sees only their own agents |
+
+Not verified: the live effect-ledger suite (`phase-10g-2`), crash recovery against the real GitHub API, a real MCP client against the hosted endpoint, and the persisted-conflict insert against a real refusal (it is covered with a fake database only).
+
+## Known behaviour of the conflict gate
+
+[#known-behaviour-of-the-conflict-gate](#known-behaviour-of-the-conflict-gate)
+
+- **The gate is only as strong as the declared `depends_on`.** A step with no declared dependency is never flagged, even when its intent read the changed resource.
+- **Verdicts are `irrelevant` or `invalidating`.** The `fatal` verdict is not produced by the deterministic adjudicator.
+- **Versions are read from an in-process cache** loaded at startup. A change made by another process is not seen until restart, so run a single server instance.
+- **Nothing watches resources.** `update_resource` does not invoke the conflict engine, and `handleCommit()` has no caller. A stale plan is noticed when its agent calls `prepare_action`.
+- **Refusals are recorded best-effort** in `conflicts` (one row per intent and set of changed resources). A failed insert is logged and never changes the refusal.
+- **Step numbers are zero-based** in messages and records.
+
+* * *
 
 ## Current limitations
 
