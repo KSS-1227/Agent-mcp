@@ -150,7 +150,7 @@ export default function OverviewPage() {
                 <span className="text-2xl font-bold font-mono text-[#252722]">
                 {metrics.detectedConflicts === null ? "—" : metrics.detectedConflicts}
                 </span>
-                <span className="text-[11px] text-[#777A73]">not persisted</span>
+                <span className="text-[11px] text-[#777A73]">{metrics.detectedConflicts === null ? "not persisted" : "your intents"}</span>
               </div>
               <div className="mt-3 pt-2 border-t border-[#E5E4DE] flex items-center justify-between text-[11px] text-[#777A73]">
                 <span>Source: no `conflicts` writer</span>

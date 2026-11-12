@@ -9,15 +9,16 @@ export async function GET(request: Request) {
 
   if (scope.kind === "user") {
     const now = new Date().toISOString();
-    const [agentsResult, activeResult, recoveryResult, committedResult, failedResult, recentResult] = await Promise.all([
+    const [agentsResult, activeResult, recoveryResult, committedResult, failedResult, recentResult, conflictsResult] = await Promise.all([
       scope.supabase.from("agents").select("id", { count: "exact", head: true }),
       scope.supabase.from("actions").select("id", { count: "exact", head: true }).eq("status", "PENDING"),
       scope.supabase.from("actions").select("id", { count: "exact", head: true }).eq("status", "PENDING").lt("lease_expires_at", now),
       scope.supabase.from("actions").select("id", { count: "exact", head: true }).eq("status", "COMMITTED"),
       scope.supabase.from("actions").select("id", { count: "exact", head: true }).eq("status", "FAILED"),
       scope.supabase.from("actions").select("idempotency_key, action_type, status, created_at").order("created_at", { ascending: false }).limit(6),
+      scope.supabase.from("conflicts").select("id", { count: "exact", head: true }),
     ]);
-    const failedQuery = [agentsResult, activeResult, recoveryResult, committedResult, failedResult, recentResult].some((result) => result.error);
+    const failedQuery = [agentsResult, activeResult, recoveryResult, committedResult, failedResult, recentResult, conflictsResult].some((result) => result.error);
     if (failedQuery) return NextResponse.json({ data: null, isDemo: false, source: "supabase-session", error: "Could not load overview activity.", code: "USER_QUERY_FAILED" }, { status: 503 });
     const totalCommitted = committedResult.count ?? 0;
     const totalFailed = failedResult.count ?? 0;
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       data: {
         registeredAgents: agentsResult.count ?? 0, activeActions: activeResult.count ?? 0,
-        detectedConflicts: null, pendingRecoveries: recoveryResult.count ?? 0,
+        detectedConflicts: conflictsResult.count ?? 0, pendingRecoveries: recoveryResult.count ?? 0,
         totalCommitted, totalFailed,
         commitSuccessRate: outcomeCount ? Number(((totalCommitted / outcomeCount) * 100).toFixed(1)) : null,
         recentActivity,

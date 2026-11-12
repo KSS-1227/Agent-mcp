@@ -25,9 +25,94 @@ import {
   AlertTriangle,
 } from "lucide-react";
 
+type UserConflict = {
+  id: string;
+  intentId: string;
+  agentName: string | null;
+  intentStatement: string | null;
+  type: string;
+  severity: string;
+  decision: string | null;
+  affectedSteps: number[];
+  preservedSteps: number[];
+  resourceChanges: Array<{ key: string; kind: string; from: number; to: number }>;
+  createdAt: string;
+};
+
+function UserConflictsView({
+  loading,
+  error,
+  conflicts,
+}: {
+  loading: boolean;
+  error: string | null;
+  conflicts: UserConflict[];
+}) {
+  if (loading) return <TableSkeleton rows={4} />;
+  if (error) return <EmptyState title="Conflict Monitor Unavailable" description={error} />;
+  if (conflicts.length === 0) {
+    return (
+      <EmptyState
+        title="No conflicts recorded for your agents yet"
+        description="When an agent tries to act on a plan that is out of date, the refusal is recorded here."
+      />
+    );
+  }
+  const steps = (s: number[]) => (s.length ? `[${s.join(", ")}]` : "none");
+  return (
+    <div className="space-y-2">
+      <p className="text-[11px] text-[#777A73]">
+        Refusals recorded for your agents. Plan steps are numbered from 0.
+      </p>
+      <div className="overflow-x-auto border border-[#E5E4DE] rounded-md bg-white">
+        <table className="w-full text-xs">
+          <thead className="bg-[#F9F8F5] text-[#777A73] text-left">
+            <tr>
+              <th className="px-3 py-2 font-semibold">Agent / intent</th>
+              <th className="px-3 py-2 font-semibold">Severity</th>
+              <th className="px-3 py-2 font-semibold">Decision</th>
+              <th className="px-3 py-2 font-semibold">Invalidated steps</th>
+              <th className="px-3 py-2 font-semibold">Preserved steps</th>
+              <th className="px-3 py-2 font-semibold">Changed resources</th>
+              <th className="px-3 py-2 font-semibold">When</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#EEEDE6]">
+            {conflicts.map((c) => (
+              <tr key={c.id} className="align-top">
+                <td className="px-3 py-2">
+                  <div className="font-medium text-[#252722]">{c.agentName ?? "-"}</div>
+                  <div className="text-[11px] text-[#777A73]">{c.intentStatement ?? "-"}</div>
+                </td>
+                <td className="px-3 py-2">
+                  <Badge variant="danger" size="sm" dot>{c.severity}</Badge>
+                </td>
+                <td className="px-3 py-2">
+                  <Badge variant="olive" size="sm">{c.decision ?? "-"}</Badge>
+                </td>
+                <td className="px-3 py-2 font-mono text-[#872B28]">{steps(c.affectedSteps)}</td>
+                <td className="px-3 py-2 font-mono text-[#52745B]">{steps(c.preservedSteps)}</td>
+                <td className="px-3 py-2 font-mono text-[11px]">
+                  {c.resourceChanges.length === 0
+                    ? "-"
+                    : c.resourceChanges.map((r, i) => (
+                        <div key={i}>{r.key} v{r.from} -&gt; v{r.to}</div>
+                      ))}
+                </td>
+                <td className="px-3 py-2 text-[#777A73]">{new Date(c.createdAt).toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function ConflictMonitorPage() {
   const { mode, refreshKey, scope } = useDashboard();
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
+  const [userConflicts, setUserConflicts] = useState<UserConflict[]>([]);
   const [graphData, setGraphData] = useState<{
     nodes: GraphNode[];
     edges: any[];
@@ -47,10 +132,30 @@ export default function ConflictMonitorPage() {
 
   useEffect(() => {
     if (scope === "user") {
-      setLoading(false);
+      let alive = true;
+      setLoading(true);
       setConflicts([]);
       setGraphData(null);
-      return;
+      fetch("/api/conflicts")
+        .then(async (res) => {
+          const body = await res.json().catch(() => ({}));
+          if (!alive) return;
+          if (!res.ok) throw new Error(body.error || `Conflict request failed (HTTP ${res.status})`);
+          setUserConflicts(body.data || []);
+          setError(null);
+        })
+        .catch((err) => {
+          if (alive) {
+            setError(err.message);
+            setUserConflicts([]);
+          }
+        })
+        .finally(() => {
+          if (alive) setLoading(false);
+        });
+      return () => {
+        alive = false;
+      };
     }
     let isMounted = true;
     setLoading(true);
@@ -250,10 +355,7 @@ export default function ConflictMonitorPage() {
   return (
     <AppLayout title="Conflict Monitor & Provenance Graph">
       {scope === "user" ? (
-        <EmptyState
-          title="Conflict history is not available for your account"
-          description="The dashboard does not expose conflict records or a provenance graph in user scope."
-        />
+        <UserConflictsView loading={loading} error={error} conflicts={userConflicts} />
       ) : <>
       {/* Overview Banner */}
       <div className="bg-white p-4 border border-[#E5E4DE] rounded-md space-y-1">

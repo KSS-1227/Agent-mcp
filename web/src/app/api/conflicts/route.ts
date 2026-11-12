@@ -4,12 +4,12 @@ import { NOT_PERSISTED } from "@/lib/not-persisted";
 import { DEMO_CONFLICTS, DEMO_PROVENANCE_GRAPH } from "@/lib/demo-data";
 
 /**
- * Conflict adjudication history.
+ * Conflict history.
  *
- * The unified backend evaluates conflicts in-process and returns the verdict to
- * the calling agent; it never writes to the `conflicts` table. This endpoint
- * therefore reports the capability as unsupported instead of pretending to be an
- * empty history. Live provenance is served separately by /api/provenance.
+ * User scope: reads the owner-limited `conflicts` rows through the user's Supabase session.
+ * Column-level grants allow ONLY the columns listed below; never select("*") and never
+ * reference reason, conflicting_intent_id, dedupe_key or updated_at here.
+ * Operator scope keeps the previous behaviour (unsupported / demo fixtures).
  */
 export async function GET(request: Request) {
   const scope = await getScope(request);
@@ -18,7 +18,56 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get("mode");
 
-  if (scope.kind === "operator" && mode === "demo") {
+  if (scope.kind === "user") {
+    const { data: rows, error } = await scope.supabase
+      .from("conflicts")
+      .select("id, intent_id, conflict_type, severity, decision, affected_steps, preserved_steps, resource_changes, created_at")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) {
+      return NextResponse.json(
+        { data: [], graph: null, supported: true, isDemo: false, code: "CONFLICTS_QUERY_FAILED", error: "Conflicts could not be loaded." },
+        { status: 500 }
+      );
+    }
+
+    const list = rows ?? [];
+    const intentIds = Array.from(new Set(list.map((r: any) => r.intent_id as string)));
+    const intentById = new Map<string, { agent_id: string; intent_statement: string }>();
+    const agentNameById = new Map<string, string>();
+    if (intentIds.length > 0) {
+      const { data: intents } = await scope.supabase
+        .from("intents")
+        .select("id, agent_id, intent_statement")
+        .in("id", intentIds);
+      (intents ?? []).forEach((i: any) => intentById.set(i.id, i));
+      const agentIds = Array.from(new Set((intents ?? []).map((i: any) => i.agent_id as string)));
+      if (agentIds.length > 0) {
+        const { data: agents } = await scope.supabase.from("agents").select("id, name").in("id", agentIds);
+        (agents ?? []).forEach((a: any) => agentNameById.set(a.id, a.name));
+      }
+    }
+
+    const data = list.map((r: any) => {
+      const intent = intentById.get(r.intent_id);
+      return {
+        id: r.id,
+        intentId: r.intent_id,
+        agentName: intent ? agentNameById.get(intent.agent_id) ?? null : null,
+        intentStatement: intent?.intent_statement ?? null,
+        type: r.conflict_type,
+        severity: r.severity,
+        decision: r.decision,
+        affectedSteps: r.affected_steps ?? [],
+        preservedSteps: r.preserved_steps ?? [],
+        resourceChanges: r.resource_changes ?? [],
+        createdAt: r.created_at,
+      };
+    });
+    return NextResponse.json({ data, graph: null, supported: true, isDemo: false, limited: true });
+  }
+
+  if (mode === "demo") {
     return NextResponse.json({
       data: DEMO_CONFLICTS,
       graph: DEMO_PROVENANCE_GRAPH,
@@ -34,8 +83,8 @@ export async function GET(request: Request) {
       supported: false,
       isDemo: false,
       code: NOT_PERSISTED.conflicts.code,
-      error: scope.kind === "user" ? "Conflict history is not available for your account." : NOT_PERSISTED.conflicts.message,
-      detail: scope.kind === "user" ? "Conflict adjudications are not exposed in user scope." : NOT_PERSISTED.conflicts.detail,
+      error: NOT_PERSISTED.conflicts.message,
+      detail: NOT_PERSISTED.conflicts.detail,
     },
     { status: 501 }
   );
